@@ -58,6 +58,7 @@ Project documentation lives in `docs/` and `README.md` — read these for contex
 
 ## Hard Rules
 
+- **Migrations:** Every migration must have a working `.down.sql` rollback. Use `IF NOT EXISTS` on all CREATE statements and `IF EXISTS` on all DROP statements so up/down are idempotent.
 - **Map privacy:** A user's map is visible only to themselves and their accepted friends. Enforce this authorization on every map-read endpoint (return 403 otherwise).
 - **Auth:** Google OAuth required, plus email/password. Built last, but schema already supports it (`users.password_hash` nullable + `user_identities`).
 

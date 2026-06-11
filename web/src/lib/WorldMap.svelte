@@ -28,12 +28,12 @@
 	// cracks when count mode is on.
 	function fillFor(code: string): string {
 		const count = cracks[code] ?? 0;
-		if (count <= 0) return '#e5e7eb';
-		if (!countMode) return '#16a34a';
+		if (count <= 0) return '#dfe6ee';
+		if (!countMode) return '#10b981';
 		// Count mode: ramp from light to dark green over counts 1..6+.
 		const step = Math.min(count, 6);
-		const lightness = 60 - step * 6; // 54% .. 24%
-		return `hsl(142, 60%, ${lightness}%)`;
+		const lightness = 58 - step * 6; // 52% .. 22%
+		return `hsl(160, 70%, ${lightness}%)`;
 	}
 
 	function handleClick(e: MouseEvent, code: string) {
@@ -71,7 +71,7 @@
 		<div class="tooltip">
 			<strong>{hovered.name}</strong>
 			{#if hovered.count > 0}
-				<span class="count">· {hovered.count} crack{hovered.count === 1 ? '' : 's'}</span>
+				<span class="count">{hovered.count} crack{hovered.count === 1 ? '' : 's'}</span>
 			{/if}
 		</div>
 	{/if}
@@ -85,31 +85,57 @@
 	svg {
 		width: 100%;
 		height: auto;
-		background: #cfe8ff;
-		border-radius: 8px;
+		background: linear-gradient(160deg, #dbeafe 0%, #c7e7f5 50%, #bfe9e4 100%);
+		border-radius: var(--radius);
+		box-shadow: var(--shadow);
+		border: 1px solid var(--border);
 	}
 	.country {
-		stroke: #ffffff;
-		stroke-width: 0.5;
+		stroke: rgba(255, 255, 255, 0.85);
+		stroke-width: 0.4;
+		stroke-linejoin: round;
 		cursor: pointer;
-		transition: fill 0.1s ease;
+		transition:
+			fill 0.25s var(--ease),
+			filter 0.15s var(--ease);
 	}
 	.country:hover {
-		stroke: #111827;
-		stroke-width: 1;
+		stroke: #0f172a;
+		stroke-width: 0.9;
+		filter: brightness(1.08) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
 	}
 	.tooltip {
 		position: absolute;
-		top: 8px;
-		left: 8px;
-		background: rgba(17, 24, 39, 0.85);
+		top: 12px;
+		left: 12px;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		background: rgba(15, 23, 42, 0.9);
+		backdrop-filter: blur(6px);
 		color: white;
-		padding: 4px 10px;
-		border-radius: 6px;
-		font-size: 14px;
+		padding: 0.4rem 0.75rem;
+		border-radius: 999px;
+		font-size: 0.85rem;
 		pointer-events: none;
+		box-shadow: var(--shadow-lg);
+		animation: tip-in 0.15s var(--ease);
 	}
 	.count {
-		opacity: 0.85;
+		background: rgba(255, 255, 255, 0.18);
+		padding: 0.05rem 0.45rem;
+		border-radius: 999px;
+		font-size: 0.78rem;
+		font-weight: 600;
+	}
+	@keyframes tip-in {
+		from {
+			opacity: 0;
+			transform: translateY(-4px);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+		}
 	}
 </style>

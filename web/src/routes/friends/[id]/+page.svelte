@@ -36,31 +36,87 @@
 </script>
 
 <a href="/friends" class="back">← Back to friends</a>
-<h1>{username ? `${username}'s map` : 'Map'}</h1>
+
+<div class="head">
+	<div>
+		<h1>{username ? `${username}'s map` : 'Map'}</h1>
+		<p class="muted sub">View only · you can see this because you're friends.</p>
+	</div>
+	{#if !error}
+		<div class="stat">
+			<span class="num">{total}</span>
+			<span class="muted">cracked</span>
+		</div>
+	{/if}
+</div>
 
 {#if error}
-	<p class="error">⚠️ {error}</p>
-	<p class="hint">You can only view the maps of users who are your accepted friends.</p>
+	<div class="card empty">
+		<span class="emoji">🔒</span>
+		<p>{error}</p>
+		<p class="muted small">You can only view the maps of your accepted friends.</p>
+	</div>
+{:else}
+	{#if loading}<p class="muted"><span class="spinner"></span> Loading…</p>{/if}
+	<WorldMap {cracks} countMode={true} oncrack={noop} onuncrack={noop} />
 {/if}
-{#if loading}<p>Loading…</p>{/if}
-{#if !error}<p class="hint"><strong>{total}</strong> countries cracked (view only).</p>{/if}
-
-<WorldMap {cracks} countMode={true} oncrack={noop} onuncrack={noop} />
 
 <style>
-	h1 {
-		margin: 0.25rem 0 0.5rem;
-	}
 	.back {
-		color: #6b7280;
+		color: var(--muted);
 		text-decoration: none;
+		font-size: 0.88rem;
+	}
+	.back:hover {
+		color: var(--text);
+	}
+	.head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
+		margin: 0.4rem 0 1rem;
+	}
+	h1 {
+		margin: 0;
+	}
+	.sub {
+		margin: 0.25rem 0 0;
 		font-size: 0.9rem;
 	}
-	.hint {
-		color: #6b7280;
-		font-size: 0.9rem;
+	.stat {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 0.5rem 1rem;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		box-shadow: var(--shadow-sm);
+		line-height: 1.1;
 	}
-	.error {
-		color: #b91c1c;
+	.stat .num {
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: var(--primary-700);
+	}
+	.stat .muted {
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+	.empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 2.5rem;
+		text-align: center;
+	}
+	.empty .emoji {
+		font-size: 2.2rem;
+	}
+	.small {
+		font-size: 0.82rem;
 	}
 </style>

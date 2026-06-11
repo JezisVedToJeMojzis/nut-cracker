@@ -10,6 +10,9 @@
 		type Friend
 	} from '$lib/api';
 	import { user } from '$lib/user.svelte';
+	import { fade, slide } from 'svelte/transition';
+
+	const initials = (name: string) => name.slice(0, 2).toUpperCase();
 
 	let friends = $state<Friend[]>([]);
 	let incoming = $state<Friend[]>([]);
@@ -55,41 +58,44 @@
 </script>
 
 <h1>Friends</h1>
+<p class="muted sub">Add friends to share your map with them.</p>
 
 {#if !user.id}
-	<p class="hint">Enter your user ID in the top-right to manage friends.</p>
+	<div class="card empty">Enter your user ID in the top-right to manage friends.</div>
 {:else}
-	{#if error}<p class="error">⚠️ {error}</p>{/if}
-	{#if notice}<p class="notice">{notice}</p>{/if}
+	{#if error}<p class="banner error" transition:slide>⚠️ {error}</p>{/if}
+	{#if notice}<p class="banner notice" transition:slide>{notice}</p>{/if}
 
-	<section>
+	<section class="card">
 		<h2>Add a friend</h2>
 		<div class="row">
 			<input
+				class="input"
 				type="text"
 				bind:value={targetId}
 				placeholder="friend's user UUID"
 				onkeydown={(e) => e.key === 'Enter' && send()}
 			/>
-			<button onclick={send}>Send request</button>
+			<button class="btn" onclick={send}>Send request</button>
 		</div>
 	</section>
 
-	<section>
-		<h2>Incoming requests ({incoming.length})</h2>
-		{#if incoming.length === 0}
-			<p class="hint">None.</p>
-		{:else}
+	{#if incoming.length > 0}
+		<section>
+			<h2>Incoming requests <span class="badge">{incoming.length}</span></h2>
 			<ul>
 				{#each incoming as f (f.id)}
-					<li>
-						<span>{f.username}</span>
+					<li class="card" transition:slide>
+						<span class="who">
+							<span class="avatar">{initials(f.username)}</span>
+							{f.username}
+						</span>
 						<span class="actions">
-							<button onclick={() => act(() => acceptRequest(user.id, f.id), 'Accepted.')}>
+							<button class="btn" onclick={() => act(() => acceptRequest(user.id, f.id), 'Accepted.')}>
 								Accept
 							</button>
 							<button
-								class="ghost"
+								class="btn btn-ghost"
 								onclick={() => act(() => declineRequest(user.id, f.id), 'Declined.')}
 							>
 								Decline
@@ -98,39 +104,50 @@
 					</li>
 				{/each}
 			</ul>
-		{/if}
-	</section>
+		</section>
+	{/if}
 
-	<section>
-		<h2>Sent requests ({outgoing.length})</h2>
-		{#if outgoing.length === 0}
-			<p class="hint">None.</p>
-		{:else}
+	{#if outgoing.length > 0}
+		<section>
+			<h2>Sent requests <span class="badge">{outgoing.length}</span></h2>
 			<ul>
 				{#each outgoing as f (f.id)}
-					<li>
-						<span>{f.username}</span>
-						<button class="ghost" onclick={() => act(() => removeFriend(user.id, f.id), 'Cancelled.')}>
+					<li class="card" transition:slide>
+						<span class="who">
+							<span class="avatar pending">{initials(f.username)}</span>
+							{f.username}
+							<span class="muted small">pending…</span>
+						</span>
+						<button
+							class="btn btn-ghost"
+							onclick={() => act(() => removeFriend(user.id, f.id), 'Cancelled.')}
+						>
 							Cancel
 						</button>
 					</li>
 				{/each}
 			</ul>
-		{/if}
-	</section>
+		</section>
+	{/if}
 
 	<section>
-		<h2>Your friends ({friends.length})</h2>
+		<h2>Your friends <span class="badge">{friends.length}</span></h2>
 		{#if friends.length === 0}
-			<p class="hint">No friends yet.</p>
+			<div class="card empty">No friends yet — send a request above.</div>
 		{:else}
 			<ul>
 				{#each friends as f (f.id)}
-					<li>
-						<a href={`/friends/${f.id}`}>{f.username}</a>
+					<li class="card" transition:slide>
+						<a class="who" href={`/friends/${f.id}`}>
+							<span class="avatar">{initials(f.username)}</span>
+							{f.username}
+						</a>
 						<span class="actions">
-							<a class="button-link" href={`/friends/${f.id}`}>View map</a>
-							<button class="ghost" onclick={() => act(() => removeFriend(user.id, f.id), 'Removed.')}>
+							<a class="btn" href={`/friends/${f.id}`}>View map</a>
+							<button
+								class="btn btn-danger"
+								onclick={() => act(() => removeFriend(user.id, f.id), 'Removed.')}
+							>
 								Unfriend
 							</button>
 						</span>
@@ -143,76 +160,103 @@
 
 <style>
 	h1 {
-		margin-top: 0;
+		margin: 0;
+	}
+	.sub {
+		margin: 0.25rem 0 1.25rem;
+		font-size: 0.92rem;
 	}
 	section {
-		margin: 1.5rem 0;
+		margin: 1.25rem 0;
+	}
+	section.card {
+		padding: 1.1rem 1.25rem;
 	}
 	h2 {
-		font-size: 1rem;
-		margin-bottom: 0.5rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0 0 0.75rem;
 	}
 	.row {
 		display: flex;
 		gap: 0.5rem;
 	}
-	input {
+	.row .input {
 		flex: 1;
-		max-width: 360px;
-		padding: 0.4rem 0.6rem;
-		border: 1px solid #d1d5db;
-		border-radius: 6px;
+		max-width: 380px;
 	}
 	ul {
 		list-style: none;
 		padding: 0;
 		margin: 0;
-		max-width: 480px;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		max-width: 560px;
 	}
 	li {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 0.5rem 0.75rem;
-		background: white;
-		border: 1px solid #e5e7eb;
-		border-radius: 6px;
-		margin-bottom: 0.4rem;
+		padding: 0.6rem 0.85rem;
+		transition:
+			box-shadow 0.15s var(--ease),
+			transform 0.15s var(--ease);
+	}
+	li:hover {
+		box-shadow: var(--shadow);
+		transform: translateY(-1px);
+	}
+	.who {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		font-weight: 550;
+		color: var(--text);
+		text-decoration: none;
+	}
+	.avatar {
+		display: grid;
+		place-items: center;
+		width: 34px;
+		height: 34px;
+		border-radius: 50%;
+		background: linear-gradient(135deg, var(--primary), var(--primary-700));
+		color: white;
+		font-size: 0.78rem;
+		font-weight: 600;
+		flex-shrink: 0;
+	}
+	.avatar.pending {
+		background: linear-gradient(135deg, #cbd5e1, #94a3b8);
+	}
+	.small {
+		font-size: 0.78rem;
+		font-weight: 400;
 	}
 	.actions {
 		display: flex;
 		gap: 0.4rem;
 		align-items: center;
 	}
-	button,
-	.button-link {
-		padding: 0.3rem 0.7rem;
-		border: none;
-		background: #16a34a;
-		color: white;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 0.85rem;
-		text-decoration: none;
+	.empty {
+		padding: 1.5rem;
+		text-align: center;
+		color: var(--muted);
 	}
-	button:hover {
-		background: #15803d;
-	}
-	.ghost {
-		background: #f3f4f6;
-		color: #374151;
-	}
-	.ghost:hover {
-		background: #e5e7eb;
-	}
-	.hint {
-		color: #6b7280;
+	.banner {
+		padding: 0.6rem 0.9rem;
+		border-radius: var(--radius-sm);
 		font-size: 0.9rem;
+		margin: 0.5rem 0;
 	}
-	.error {
-		color: #b91c1c;
+	.banner.error {
+		background: var(--danger-soft);
+		color: var(--danger);
 	}
-	.notice {
-		color: #16a34a;
+	.banner.notice {
+		background: var(--primary-soft);
+		color: var(--primary-700);
 	}
 </style>

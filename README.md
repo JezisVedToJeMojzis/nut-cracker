@@ -46,6 +46,19 @@ The server listens on `:8080` by default. Health check:
 curl http://localhost:8080/health
 ```
 
+### Frontend
+
+```bash
+cd web
+npm install
+npm run dev      # http://localhost:5173
+```
+
+The frontend (SvelteKit) proxies `/api/*` to the Go backend on `:8080`. Until
+real auth exists, enter a user UUID in the page to act as that user (sent as the
+`X-User-ID` header). Left-click a country to crack it, right-click to remove a
+crack; toggle **Count mode** to track how many people per country.
+
 ## Common Commands
 
 ```bash

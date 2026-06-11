@@ -16,5 +16,15 @@ export default defineConfig({
 			// See https://svelte.dev/docs/kit/adapters for more information about adapters.
 			adapter: adapter()
 		})
-	]
+	],
+	server: {
+		proxy: {
+			// Proxy API calls to the Go backend, stripping the /api prefix.
+			'/api': {
+				target: 'http://localhost:8080',
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/api/, '')
+			}
+		}
+	}
 });

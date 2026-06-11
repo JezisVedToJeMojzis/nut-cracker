@@ -57,6 +57,7 @@ docker compose down            # stop database
 
 ## Documentation
 
+- [API reference](docs/api.md)
 - [Database schema](docs/schema.md)
 
 ## Project Structure

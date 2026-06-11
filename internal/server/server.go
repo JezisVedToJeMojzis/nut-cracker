@@ -40,6 +40,7 @@ func (s *Server) Routes() http.Handler {
 
 	mux.HandleFunc("POST /friends/requests", s.handleSendRequest)
 	mux.HandleFunc("POST /friends/requests/{requesterId}/accept", s.handleAcceptRequest)
+	mux.HandleFunc("POST /friends/requests/{requesterId}/decline", s.handleDeclineRequest)
 	mux.HandleFunc("GET /friends", s.handleListFriends)
 	mux.HandleFunc("GET /friends/requests/incoming", s.handleListIncoming)
 	mux.HandleFunc("GET /friends/requests/outgoing", s.handleListOutgoing)
@@ -196,6 +197,26 @@ func (s *Server) handleAcceptRequest(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 	default:
 		writeJSON(w, http.StatusOK, map[string]string{"status": "accepted"})
+	}
+}
+
+// handleDeclineRequest declines a pending request addressed to the caller.
+func (s *Server) handleDeclineRequest(w http.ResponseWriter, r *http.Request) {
+	caller := currentUser(r)
+	if caller == "" {
+		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+		return
+	}
+	requester := r.PathValue("requesterId")
+
+	err := s.friends.Decline(r.Context(), caller, requester)
+	switch {
+	case errors.Is(err, friends.ErrRequestNotFound):
+		writeError(w, http.StatusNotFound, "no pending request from that user")
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "internal error")
+	default:
+		writeJSON(w, http.StatusOK, map[string]string{"status": "declined"})
 	}
 }
 

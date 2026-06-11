@@ -57,6 +57,10 @@ you a pending request, it is auto-accepted.
 Accept a pending request addressed to the caller. `200 {"status":"accepted"}`,
 `404` if no such pending request.
 
+### `POST /friends/requests/{requesterId}/decline`
+Decline a pending request addressed to the caller. `200 {"status":"declined"}`,
+`404` if no such pending request.
+
 ### `GET /friends`
 Accepted friends of the caller.
 

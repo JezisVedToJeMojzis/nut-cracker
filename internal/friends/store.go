@@ -119,6 +119,22 @@ func (s *Store) Accept(ctx context.Context, recipient, requester string) error {
 	return nil
 }
 
+// Decline rejects a pending request (requester -> recipient) by deleting it.
+// Returns ErrRequestNotFound if no such pending request exists.
+func (s *Store) Decline(ctx context.Context, recipient, requester string) error {
+	tag, err := s.db.Exec(ctx,
+		`DELETE FROM friendships
+		 WHERE user_id = $1 AND friend_id = $2 AND status = 'pending'`,
+		requester, recipient)
+	if err != nil {
+		return fmt.Errorf("declining: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrRequestNotFound
+	}
+	return nil
+}
+
 // Remove deletes any relationship between the two users (accepted or pending),
 // covering unfriend, cancel-request, and decline-request.
 func (s *Store) Remove(ctx context.Context, userID, otherID string) error {

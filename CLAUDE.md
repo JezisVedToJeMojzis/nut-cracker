@@ -50,18 +50,16 @@ migrate -path internal/db/migrations -database "$DATABASE_URL" down 1
 migrate create -ext sql -dir internal/db/migrations -seq <name>
 ```
 
-## Database Schema
+## Documentation
 
-Five tables (migration `000001_init`):
-- `users` — accounts (`password_hash` nullable for OAuth-only users)
-- `user_identities` — external logins (Google, etc.); PK `(provider, provider_user_id)`
-- `countries` — ISO 3166-1 alpha-2 reference list (`code`, `name`)
-- `user_countries` — colored countries; `cracks` int (>=1) = people cracked with from that country; PK `(user_id, country_code)`
-- `friendships` — request/accept model (`status`: pending|accepted)
+Project documentation lives in `docs/` and `README.md` — read these for context:
+- **Database schema:** `docs/schema.md`
+- **Setup & commands:** `README.md`
 
-**Hard rule:** a user's map is visible only to themselves and their accepted friends. Enforce this authorization on every map-read endpoint (return 403 otherwise).
+## Hard Rules
 
-**Auth:** Google OAuth required, plus email/password. Build auth last, but schema already supports it.
+- **Map privacy:** A user's map is visible only to themselves and their accepted friends. Enforce this authorization on every map-read endpoint (return 403 otherwise).
+- **Auth:** Google OAuth required, plus email/password. Built last, but schema already supports it (`users.password_hash` nullable + `user_identities`).
 
 ## Architecture
 

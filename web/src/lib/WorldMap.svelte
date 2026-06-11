@@ -236,6 +236,10 @@
 			fill 0.25s var(--ease),
 			filter 0.15s var(--ease);
 	}
+	.country:focus,
+	.country:focus-visible {
+		outline: none;
+	}
 	.country:hover {
 		stroke: #f8fafc;
 		stroke-width: 0.9;

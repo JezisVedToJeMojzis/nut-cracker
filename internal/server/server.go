@@ -125,8 +125,6 @@ func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, users.ErrInvalidUsername):
 		writeError(w, http.StatusBadRequest, "username must be 2-30 characters")
-	case errors.Is(err, users.ErrUsernameTaken):
-		writeError(w, http.StatusConflict, "username already taken")
 	case err != nil:
 		writeError(w, http.StatusInternalServerError, "internal error")
 	default:

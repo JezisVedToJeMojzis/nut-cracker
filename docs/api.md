@@ -20,7 +20,7 @@ The caller's full profile (includes email). Self only (`403` otherwise).
 
 ### `PATCH /users/{id}`
 Update the caller's username. Self only. Body `{ "username": "newname" }`.
-`400` invalid (2-30 chars) · `409` username taken.
+`400` invalid (must be 2-30 chars). Usernames need not be unique.
 
 ### `GET /users/{id}/card`
 Public card (id + username) for friend search — lets the caller see who an id

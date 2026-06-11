@@ -92,7 +92,7 @@
 
 	<div class="card field">
 		<div class="field-label">Username</div>
-		<div class="muted small">Your display name, shown to other users. Must be unique.</div>
+		<div class="muted small">Your display name, shown to other users.</div>
 		<div class="id-row">
 			<input
 				class="input"

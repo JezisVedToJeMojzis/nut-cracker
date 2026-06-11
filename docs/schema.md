@@ -11,7 +11,7 @@ Migration files live in `internal/db/migrations/`.
 |---|---|---|
 | `id` | `bigint` PK (identity) | sequential, indexed; the short, shareable user id used for search |
 | `email` | `text` unique | login identifier |
-| `username` | `text` unique | editable display name shown to others |
+| `username` | `text` | editable display name shown to others (not unique) |
 | `password_hash` | `text` nullable | null for OAuth-only users |
 | `created_at` | `timestamptz` | |
 

@@ -9,15 +9,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
 	// ErrNotFound is returned when no user matches.
 	ErrNotFound = errors.New("user not found")
-	// ErrUsernameTaken is returned when a username is already in use.
-	ErrUsernameTaken = errors.New("username already taken")
 	// ErrInvalidUsername is returned when a username fails validation.
 	ErrInvalidUsername = errors.New("username must be 2-30 characters")
 )
@@ -91,10 +88,6 @@ func (s *Store) UpdateUsername(ctx context.Context, id int64, username string) (
 		id, username).Scan(&p.ID, &p.Username, &p.Email, &p.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Profile{}, ErrNotFound
-	}
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		return Profile{}, ErrUsernameTaken
 	}
 	if err != nil {
 		return Profile{}, fmt.Errorf("updating username: %w", err)

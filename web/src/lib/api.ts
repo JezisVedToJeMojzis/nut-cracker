@@ -20,6 +20,10 @@ export type DecrementResult = {
 	removed: boolean;
 };
 
+export type Settings = {
+	count_mode: boolean;
+};
+
 const BASE = '/api';
 
 function headers(userId: string): HeadersInit {
@@ -66,6 +70,22 @@ export async function decrement(userId: string, code: string): Promise<Decrement
 		headers: headers(userId)
 	});
 	return handle<DecrementResult>(res);
+}
+
+/** Fetch the caller's settings (feature flags). */
+export async function getSettings(userId: string): Promise<Settings> {
+	const res = await fetch(`${BASE}/users/${userId}/settings`, { headers: headers(userId) });
+	return handle<Settings>(res);
+}
+
+/** Update the caller's settings. */
+export async function updateSettings(userId: string, settings: Settings): Promise<Settings> {
+	const res = await fetch(`${BASE}/users/${userId}/settings`, {
+		method: 'PUT',
+		headers: headers(userId),
+		body: JSON.stringify(settings)
+	});
+	return handle<Settings>(res);
 }
 
 /** Remove a country from the caller's own map entirely. */

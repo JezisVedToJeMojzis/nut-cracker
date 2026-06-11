@@ -10,22 +10,25 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nutcracker/internal/friends"
+	"nutcracker/internal/settings"
 	"nutcracker/internal/usermap"
 )
 
 // Server holds dependencies shared across HTTP handlers.
 type Server struct {
-	db      *pgxpool.Pool
-	maps    *usermap.Store
-	friends *friends.Store
+	db       *pgxpool.Pool
+	maps     *usermap.Store
+	friends  *friends.Store
+	settings *settings.Store
 }
 
 // New creates a Server with the given database pool.
 func New(db *pgxpool.Pool) *Server {
 	return &Server{
-		db:      db,
-		maps:    usermap.NewStore(db),
-		friends: friends.NewStore(db),
+		db:       db,
+		maps:     usermap.NewStore(db),
+		friends:  friends.NewStore(db),
+		settings: settings.NewStore(db),
 	}
 }
 
@@ -45,6 +48,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /friends/requests/incoming", s.handleListIncoming)
 	mux.HandleFunc("GET /friends/requests/outgoing", s.handleListOutgoing)
 	mux.HandleFunc("DELETE /friends/{otherId}", s.handleRemoveFriend)
+
+	mux.HandleFunc("GET /users/{id}/settings", s.handleGetSettings)
+	mux.HandleFunc("PUT /users/{id}/settings", s.handleUpdateSettings)
 	return mux
 }
 
@@ -267,6 +273,49 @@ func (s *Server) listFriendsBy(w http.ResponseWriter, r *http.Request, list func
 		users = []friends.User{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{key: users})
+}
+
+// handleGetSettings returns the caller's settings. Self only.
+func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
+	caller := currentUser(r)
+	if caller == "" {
+		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+		return
+	}
+	if caller != r.PathValue("id") {
+		writeError(w, http.StatusForbidden, "cannot read another user's settings")
+		return
+	}
+	st, err := s.settings.Get(r.Context(), caller)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+// handleUpdateSettings upserts the caller's settings. Self only.
+func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
+	caller := currentUser(r)
+	if caller == "" {
+		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+		return
+	}
+	if caller != r.PathValue("id") {
+		writeError(w, http.StatusForbidden, "cannot modify another user's settings")
+		return
+	}
+	var body settings.Settings
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	st, err := s.settings.Update(r.Context(), caller, body)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
 }
 
 // requireSelf checks that the caller is acting on their own map. It returns the

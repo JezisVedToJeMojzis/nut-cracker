@@ -42,6 +42,23 @@ map.
 Removes a country from the map entirely. Self only. `204` on success, `404` if
 not present.
 
+## Settings (feature flags)
+
+### `GET /users/{id}/settings`
+Returns the caller's feature flags (defaults if never saved). Self only (`403`
+otherwise).
+
+```json
+{ "count_mode": false }
+```
+
+### `PUT /users/{id}/settings`
+Upserts the caller's settings. Self only. Body mirrors the GET shape.
+
+```json
+{ "count_mode": true }
+```
+
 ## Friends
 
 ### `POST /friends/requests`

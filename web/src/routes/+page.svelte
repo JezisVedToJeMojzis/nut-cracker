@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import WorldMap from '$lib/WorldMap.svelte';
-	import { getMap, increment, decrement } from '$lib/api';
+	import { getMap, increment, decrement, getSettings, updateSettings } from '$lib/api';
 
 	let userId = $state('');
 	let countMode = $state(false);
@@ -22,10 +22,11 @@
 		loading = true;
 		error = '';
 		try {
-			const list = await getMap(userId, userId);
+			const [list, st] = await Promise.all([getMap(userId, userId), getSettings(userId)]);
 			const next: Record<string, number> = {};
 			for (const c of list) next[c.country_code] = c.cracks;
 			cracks = next;
+			countMode = st.count_mode;
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -38,11 +39,29 @@
 		loadMap();
 	}
 
+	async function toggleCountMode() {
+		if (!userId) {
+			error = 'Set your user ID first';
+			return;
+		}
+		const next = !countMode;
+		countMode = next; // optimistic
+		try {
+			const st = await updateSettings(userId, { count_mode: next });
+			countMode = st.count_mode;
+		} catch (e) {
+			countMode = !next; // revert on failure
+			error = e instanceof Error ? e.message : String(e);
+		}
+	}
+
 	async function onCrack(code: string) {
 		if (!userId) {
 			error = 'Set your user ID first';
 			return;
 		}
+		// With count mode off, an already-coloured country stays as-is.
+		if (!countMode && code in cracks) return;
 		try {
 			const res = await increment(userId, code);
 			cracks = { ...cracks, [code]: res.cracks };
@@ -87,7 +106,7 @@
 		<button onclick={saveUser}>Load my map</button>
 
 		<label class="toggle">
-			<input type="checkbox" bind:checked={countMode} />
+			<input type="checkbox" checked={countMode} onchange={toggleCountMode} />
 			Count mode
 		</label>
 	</div>

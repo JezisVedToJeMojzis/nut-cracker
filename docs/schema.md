@@ -64,6 +64,18 @@ Request + accept model.
 
 Primary key: `(user_id, friend_id)`. Constraint: `user_id <> friend_id`.
 
+### `user_settings` — per-user feature flags
+
+One row per user; one boolean column per toggleable feature. Add a column (and a
+migration) per new feature.
+
+| column | type | notes |
+|---|---|---|
+| `user_id` | `uuid` PK → users.id | cascade on delete |
+| `count_mode` | `boolean` default false | track cracks-per-country when on |
+| `created_at` | `timestamptz` | |
+| `updated_at` | `timestamptz` | |
+
 ## Privacy Rule
 
 A user's map is visible **only to themselves and their accepted friends**. This is

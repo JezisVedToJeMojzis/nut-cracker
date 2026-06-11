@@ -2,7 +2,7 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Accounts.
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email         TEXT NOT NULL UNIQUE,
     username      TEXT NOT NULL UNIQUE,
@@ -11,7 +11,7 @@ CREATE TABLE users (
 );
 
 -- External login identities (Google now; email/password and others later).
-CREATE TABLE user_identities (
+CREATE TABLE IF NOT EXISTS user_identities (
     user_id          UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     provider         TEXT NOT NULL,    -- e.g. 'google'
     provider_user_id TEXT NOT NULL,    -- stable ID from the provider
@@ -19,16 +19,16 @@ CREATE TABLE user_identities (
     PRIMARY KEY (provider, provider_user_id)
 );
 
-CREATE INDEX idx_user_identities_user_id ON user_identities(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_identities_user_id ON user_identities(user_id);
 
 -- Reference list of world countries, keyed by ISO 3166-1 alpha-2 code.
-CREATE TABLE countries (
+CREATE TABLE IF NOT EXISTS countries (
     code TEXT PRIMARY KEY,             -- e.g. 'SK'
     name TEXT NOT NULL                 -- e.g. 'Slovakia'
 );
 
 -- Countries a user has "cracked", with how many people from that country.
-CREATE TABLE user_countries (
+CREATE TABLE IF NOT EXISTS user_countries (
     user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     country_code TEXT NOT NULL REFERENCES countries(code),
     cracks       INTEGER NOT NULL DEFAULT 1 CHECK (cracks >= 1),
@@ -38,7 +38,7 @@ CREATE TABLE user_countries (
 );
 
 -- Friend relationships (request + accept model).
-CREATE TABLE friendships (
+CREATE TABLE IF NOT EXISTS friendships (
     user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     friend_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted')),
@@ -47,4 +47,4 @@ CREATE TABLE friendships (
     CHECK (user_id <> friend_id)       -- can't befriend yourself
 );
 
-CREATE INDEX idx_friendships_friend_id ON friendships(friend_id);
+CREATE INDEX IF NOT EXISTS idx_friendships_friend_id ON friendships(friend_id);

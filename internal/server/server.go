@@ -2,26 +2,30 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nutcracker/internal/friends"
 	"nutcracker/internal/usermap"
 )
 
 // Server holds dependencies shared across HTTP handlers.
 type Server struct {
-	db   *pgxpool.Pool
-	maps *usermap.Store
+	db      *pgxpool.Pool
+	maps    *usermap.Store
+	friends *friends.Store
 }
 
 // New creates a Server with the given database pool.
 func New(db *pgxpool.Pool) *Server {
 	return &Server{
-		db:   db,
-		maps: usermap.NewStore(db),
+		db:      db,
+		maps:    usermap.NewStore(db),
+		friends: friends.NewStore(db),
 	}
 }
 
@@ -33,6 +37,13 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /users/{id}/countries/{code}/increment", s.handleIncrement)
 	mux.HandleFunc("POST /users/{id}/countries/{code}/decrement", s.handleDecrement)
 	mux.HandleFunc("DELETE /users/{id}/countries/{code}", s.handleRemove)
+
+	mux.HandleFunc("POST /friends/requests", s.handleSendRequest)
+	mux.HandleFunc("POST /friends/requests/{requesterId}/accept", s.handleAcceptRequest)
+	mux.HandleFunc("GET /friends", s.handleListFriends)
+	mux.HandleFunc("GET /friends/requests/incoming", s.handleListIncoming)
+	mux.HandleFunc("GET /friends/requests/outgoing", s.handleListOutgoing)
+	mux.HandleFunc("DELETE /friends/{otherId}", s.handleRemoveFriend)
 	return mux
 }
 
@@ -129,6 +140,112 @@ func (s *Server) handleRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleSendRequest sends a friend request from the caller to body.To.
+func (s *Server) handleSendRequest(w http.ResponseWriter, r *http.Request) {
+	caller := currentUser(r)
+	if caller == "" {
+		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+		return
+	}
+
+	var body struct {
+		To string `json:"to"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.To == "" {
+		writeError(w, http.StatusBadRequest, "expected JSON body with a 'to' user id")
+		return
+	}
+
+	accepted, err := s.friends.SendRequest(r.Context(), caller, body.To)
+	switch {
+	case errors.Is(err, friends.ErrSelf):
+		writeError(w, http.StatusBadRequest, "cannot befriend yourself")
+	case errors.Is(err, friends.ErrUserNotFound):
+		writeError(w, http.StatusNotFound, "user not found")
+	case errors.Is(err, friends.ErrAlreadyFriends):
+		writeError(w, http.StatusConflict, "already friends")
+	case errors.Is(err, friends.ErrRequestExists):
+		writeError(w, http.StatusConflict, "request already pending")
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "internal error")
+	default:
+		status := "pending"
+		if accepted {
+			status = "accepted"
+		}
+		writeJSON(w, http.StatusCreated, map[string]string{"status": status})
+	}
+}
+
+// handleAcceptRequest accepts a pending request addressed to the caller.
+func (s *Server) handleAcceptRequest(w http.ResponseWriter, r *http.Request) {
+	caller := currentUser(r)
+	if caller == "" {
+		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+		return
+	}
+	requester := r.PathValue("requesterId")
+
+	err := s.friends.Accept(r.Context(), caller, requester)
+	switch {
+	case errors.Is(err, friends.ErrRequestNotFound):
+		writeError(w, http.StatusNotFound, "no pending request from that user")
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "internal error")
+	default:
+		writeJSON(w, http.StatusOK, map[string]string{"status": "accepted"})
+	}
+}
+
+// handleRemoveFriend removes any relationship between caller and {otherId}.
+func (s *Server) handleRemoveFriend(w http.ResponseWriter, r *http.Request) {
+	caller := currentUser(r)
+	if caller == "" {
+		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+		return
+	}
+	err := s.friends.Remove(r.Context(), caller, r.PathValue("otherId"))
+	switch {
+	case errors.Is(err, friends.ErrNotFound):
+		writeError(w, http.StatusNotFound, "no relationship to remove")
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "internal error")
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (s *Server) handleListFriends(w http.ResponseWriter, r *http.Request) {
+	s.listFriendsBy(w, r, s.friends.ListFriends, "friends")
+}
+
+func (s *Server) handleListIncoming(w http.ResponseWriter, r *http.Request) {
+	s.listFriendsBy(w, r, s.friends.ListIncoming, "requests")
+}
+
+func (s *Server) handleListOutgoing(w http.ResponseWriter, r *http.Request) {
+	s.listFriendsBy(w, r, s.friends.ListOutgoing, "requests")
+}
+
+// listFriendsBy runs a listing function for the caller and writes the result
+// under the given JSON key.
+func (s *Server) listFriendsBy(w http.ResponseWriter, r *http.Request, list func(context.Context, string) ([]friends.User, error), key string) {
+	caller := currentUser(r)
+	if caller == "" {
+		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+		return
+	}
+	users, err := list(r.Context(), caller)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if users == nil {
+		users = []friends.User{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{key: users})
 }
 
 // requireSelf checks that the caller is acting on their own map. It returns the

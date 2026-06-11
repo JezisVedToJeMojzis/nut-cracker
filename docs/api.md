@@ -42,6 +42,38 @@ map.
 Removes a country from the map entirely. Self only. `204` on success, `404` if
 not present.
 
+## Friends
+
+### `POST /friends/requests`
+Send a friend request. Body: `{ "to": "<userId>" }`. If the target already sent
+you a pending request, it is auto-accepted.
+
+```json
+{ "status": "pending" }   // or "accepted" on auto-accept
+```
+`400` self-request · `404` user not found · `409` already friends / already pending.
+
+### `POST /friends/requests/{requesterId}/accept`
+Accept a pending request addressed to the caller. `200 {"status":"accepted"}`,
+`404` if no such pending request.
+
+### `GET /friends`
+Accepted friends of the caller.
+
+```json
+{ "friends": [ { "id": "...", "username": "bob" } ] }
+```
+
+### `GET /friends/requests/incoming`
+Pending requests received by the caller. `{ "requests": [ ... ] }`
+
+### `GET /friends/requests/outgoing`
+Pending requests sent by the caller. `{ "requests": [ ... ] }`
+
+### `DELETE /friends/{otherId}`
+Removes any relationship (unfriend, cancel a sent request, or decline a received
+one). `204` on success, `404` if none exists.
+
 ## Status codes
 
 | Code | Meaning |

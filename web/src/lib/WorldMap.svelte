@@ -26,7 +26,7 @@
 
 	function fillFor(code: string): string {
 		const count = cracks[code] ?? 0;
-		if (count <= 0) return '#dfe6ee';
+		if (count <= 0) return '#3a414c';
 		if (!countMode) return '#10b981';
 		const step = Math.min(count, 6);
 		const lightness = 58 - step * 6;
@@ -211,7 +211,7 @@
 		border-radius: var(--radius);
 		box-shadow: var(--shadow);
 		border: 1px solid var(--border);
-		background: linear-gradient(160deg, #dbeafe 0%, #c7e7f5 50%, #bfe9e4 100%);
+		background: linear-gradient(160deg, var(--ocean-1) 0%, var(--ocean-2) 50%, var(--ocean-3) 100%);
 		touch-action: none; /* we handle pan/zoom ourselves */
 		cursor: grab;
 	}
@@ -228,7 +228,7 @@
 		height: auto;
 	}
 	.country {
-		stroke: rgba(255, 255, 255, 0.85);
+		stroke: rgba(20, 24, 30, 0.6);
 		stroke-width: 0.4;
 		stroke-linejoin: round;
 		cursor: pointer;
@@ -237,9 +237,9 @@
 			filter 0.15s var(--ease);
 	}
 	.country:hover {
-		stroke: #0f172a;
+		stroke: #f8fafc;
 		stroke-width: 0.9;
-		filter: brightness(1.08) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+		filter: brightness(1.15) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
 	}
 	.tooltip {
 		position: absolute;
@@ -288,7 +288,7 @@
 		height: 38px;
 		border: 1px solid var(--border);
 		border-radius: 10px;
-		background: rgba(255, 255, 255, 0.92);
+		background: rgba(37, 41, 47, 0.92);
 		backdrop-filter: blur(6px);
 		color: var(--text);
 		font-size: 1.2rem;
@@ -302,7 +302,7 @@
 		place-items: center;
 	}
 	.zoom-controls button:hover {
-		background: white;
+		background: var(--surface-2);
 		transform: translateY(-1px);
 		box-shadow: var(--shadow);
 	}

@@ -63,7 +63,7 @@
 		align-items: center;
 		gap: 1.5rem;
 		padding: 0.7rem 1.25rem;
-		background: rgba(255, 255, 255, 0.75);
+		background: var(--header-bg);
 		backdrop-filter: saturate(180%) blur(12px);
 		border-bottom: 1px solid var(--border);
 		flex-wrap: wrap;

@@ -1,28 +1,27 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import WorldMap from '$lib/WorldMap.svelte';
 	import { getMap, increment, decrement, getSettings, updateSettings } from '$lib/api';
+	import { user } from '$lib/user.svelte';
 
-	let userId = $state('');
 	let countMode = $state(false);
 	let cracks = $state<Record<string, number>>({});
 	let error = $state('');
 	let loading = $state(false);
 
-	onMount(() => {
-		const saved = localStorage.getItem('nutcracker_user_id');
-		if (saved) {
-			userId = saved;
-			loadMap();
+	// Reload whenever the current user changes.
+	$effect(() => {
+		const id = user.id;
+		if (id) loadMap(id);
+		else {
+			cracks = {};
 		}
 	});
 
-	async function loadMap() {
-		if (!userId) return;
+	async function loadMap(id: string) {
 		loading = true;
 		error = '';
 		try {
-			const [list, st] = await Promise.all([getMap(userId, userId), getSettings(userId)]);
+			const [list, st] = await Promise.all([getMap(id, id), getSettings(id)]);
 			const next: Record<string, number> = {};
 			for (const c of list) next[c.country_code] = c.cracks;
 			cracks = next;
@@ -34,20 +33,15 @@
 		}
 	}
 
-	function saveUser() {
-		localStorage.setItem('nutcracker_user_id', userId);
-		loadMap();
-	}
-
 	async function toggleCountMode() {
-		if (!userId) {
+		if (!user.id) {
 			error = 'Set your user ID first';
 			return;
 		}
 		const next = !countMode;
 		countMode = next; // optimistic
 		try {
-			const st = await updateSettings(userId, { count_mode: next });
+			const st = await updateSettings(user.id, { count_mode: next });
 			countMode = st.count_mode;
 		} catch (e) {
 			countMode = !next; // revert on failure
@@ -56,14 +50,14 @@
 	}
 
 	async function onCrack(code: string) {
-		if (!userId) {
+		if (!user.id) {
 			error = 'Set your user ID first';
 			return;
 		}
 		// With count mode off, an already-coloured country stays as-is.
 		if (!countMode && code in cracks) return;
 		try {
-			const res = await increment(userId, code);
+			const res = await increment(user.id, code);
 			cracks = { ...cracks, [code]: res.cracks };
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
@@ -71,9 +65,9 @@
 	}
 
 	async function onUncrack(code: string) {
-		if (!userId || !(code in cracks)) return;
+		if (!user.id || !(code in cracks)) return;
 		try {
-			const res = await decrement(userId, code);
+			const res = await decrement(user.id, code);
 			if (res.removed) {
 				const next = { ...cracks };
 				delete next[code];
@@ -89,93 +83,43 @@
 	const total = $derived(Object.keys(cracks).length);
 </script>
 
-<main>
-	<h1>🥜 Nut Cracker</h1>
-	<p class="tagline">Color the countries where you've cracked nuts with someone.</p>
+<h1>My Map</h1>
 
+{#if !user.id}
+	<p class="hint">Enter your user ID in the top-right to load your map.</p>
+{:else}
 	<div class="controls">
-		<label>
-			Your user ID
-			<input
-				type="text"
-				bind:value={userId}
-				placeholder="paste a user UUID"
-				onkeydown={(e) => e.key === 'Enter' && saveUser()}
-			/>
-		</label>
-		<button onclick={saveUser}>Load my map</button>
-
 		<label class="toggle">
 			<input type="checkbox" checked={countMode} onchange={toggleCountMode} />
 			Count mode
 		</label>
+		<span class="hint">
+			Left-click to {countMode ? 'add a crack' : 'mark a country'}. Right-click to remove one.
+			{#if total > 0}<strong>{total}</strong> cracked.{/if}
+		</span>
 	</div>
+{/if}
 
-	<p class="hint">
-		Left-click a country to {countMode ? 'add a crack' : 'mark it'}. Right-click to remove one.
-		{#if total > 0}<strong>{total}</strong> countries cracked.{/if}
-	</p>
+{#if error}<p class="error">⚠️ {error}</p>{/if}
+{#if loading}<p>Loading…</p>{/if}
 
-	{#if error}
-		<p class="error">⚠️ {error}</p>
-	{/if}
-	{#if loading}
-		<p>Loading…</p>
-	{/if}
-
-	<WorldMap {cracks} {countMode} oncrack={onCrack} onuncrack={onUncrack} />
-</main>
+<WorldMap {cracks} {countMode} oncrack={onCrack} onuncrack={onUncrack} />
 
 <style>
-	main {
-		max-width: 1100px;
-		margin: 0 auto;
-		padding: 1.5rem 1rem 3rem;
-		font-family: system-ui, sans-serif;
-		color: #111827;
-	}
 	h1 {
-		margin-bottom: 0.25rem;
-	}
-	.tagline {
 		margin-top: 0;
-		color: #6b7280;
 	}
 	.controls {
 		display: flex;
-		flex-wrap: wrap;
+		align-items: center;
 		gap: 1rem;
-		align-items: flex-end;
-		margin: 1rem 0;
-	}
-	label {
-		display: flex;
-		flex-direction: column;
-		font-size: 0.85rem;
-		gap: 0.25rem;
+		margin: 0.5rem 0 1rem;
+		flex-wrap: wrap;
 	}
 	.toggle {
-		flex-direction: row;
+		display: flex;
 		align-items: center;
 		gap: 0.4rem;
-		font-size: 1rem;
-	}
-	input[type='text'] {
-		padding: 0.4rem 0.6rem;
-		border: 1px solid #d1d5db;
-		border-radius: 6px;
-		min-width: 320px;
-	}
-	button {
-		padding: 0.45rem 0.9rem;
-		border: none;
-		background: #16a34a;
-		color: white;
-		border-radius: 6px;
-		cursor: pointer;
-	}
-	button:hover {
-		background: #15803d;
 	}
 	.hint {
 		color: #6b7280;

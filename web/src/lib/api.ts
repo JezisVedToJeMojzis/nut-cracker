@@ -24,6 +24,11 @@ export type Settings = {
 	count_mode: boolean;
 };
 
+export type Friend = {
+	id: string;
+	username: string;
+};
+
 const BASE = '/api';
 
 function headers(userId: string): HeadersInit {
@@ -70,6 +75,64 @@ export async function decrement(userId: string, code: string): Promise<Decrement
 		headers: headers(userId)
 	});
 	return handle<DecrementResult>(res);
+}
+
+/** List the caller's accepted friends. */
+export async function listFriends(userId: string): Promise<Friend[]> {
+	const res = await fetch(`${BASE}/friends`, { headers: headers(userId) });
+	const data = await handle<{ friends: Friend[] }>(res);
+	return data.friends;
+}
+
+/** List pending requests received by the caller. */
+export async function listIncoming(userId: string): Promise<Friend[]> {
+	const res = await fetch(`${BASE}/friends/requests/incoming`, { headers: headers(userId) });
+	const data = await handle<{ requests: Friend[] }>(res);
+	return data.requests;
+}
+
+/** List pending requests sent by the caller. */
+export async function listOutgoing(userId: string): Promise<Friend[]> {
+	const res = await fetch(`${BASE}/friends/requests/outgoing`, { headers: headers(userId) });
+	const data = await handle<{ requests: Friend[] }>(res);
+	return data.requests;
+}
+
+/** Send a friend request to another user. */
+export async function sendRequest(userId: string, to: string): Promise<{ status: string }> {
+	const res = await fetch(`${BASE}/friends/requests`, {
+		method: 'POST',
+		headers: headers(userId),
+		body: JSON.stringify({ to })
+	});
+	return handle<{ status: string }>(res);
+}
+
+/** Accept a pending request from requesterId. */
+export async function acceptRequest(userId: string, requesterId: string): Promise<void> {
+	const res = await fetch(`${BASE}/friends/requests/${requesterId}/accept`, {
+		method: 'POST',
+		headers: headers(userId)
+	});
+	await handle<unknown>(res);
+}
+
+/** Decline a pending request from requesterId. */
+export async function declineRequest(userId: string, requesterId: string): Promise<void> {
+	const res = await fetch(`${BASE}/friends/requests/${requesterId}/decline`, {
+		method: 'POST',
+		headers: headers(userId)
+	});
+	await handle<unknown>(res);
+}
+
+/** Remove a relationship (unfriend / cancel / decline) with otherId. */
+export async function removeFriend(userId: string, otherId: string): Promise<void> {
+	const res = await fetch(`${BASE}/friends/${otherId}`, {
+		method: 'DELETE',
+		headers: headers(userId)
+	});
+	if (!res.ok && res.status !== 204) throw new Error(`request failed (${res.status})`);
 }
 
 /** Fetch the caller's settings (feature flags). */

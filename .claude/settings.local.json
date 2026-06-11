@@ -7,7 +7,11 @@
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
       "Bash(docker version *)",
-      "Bash(docker compose *)"
+      "Bash(docker compose *)",
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"User\"\\); Set-Location \"C:\\\\Users\\\\mojzi\\\\Desktop\\\\Nut Cracker\\\\web\"; npm run dev 2>&1)",
+      "PowerShell(Get-Process -Name node -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(\"dev server stopped\")"
     ]
   }
 }

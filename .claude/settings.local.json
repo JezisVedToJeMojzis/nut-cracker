@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(git init *)",
-      "Bash(go version *)"
+      "Bash(go version *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(docker version *)",
+      "Bash(docker compose *)"
     ]
   }
 }

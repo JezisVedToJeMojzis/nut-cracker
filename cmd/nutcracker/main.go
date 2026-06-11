@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+
+	"nutcracker/internal/config"
+	"nutcracker/internal/db"
 )
 
 func main() {
@@ -13,6 +17,19 @@ func main() {
 }
 
 func run(args []string) error {
-	fmt.Println("nutcracker")
+	ctx := context.Background()
+
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	pool, err := db.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("connecting to database: %w", err)
+	}
+	defer pool.Close()
+
+	fmt.Println("nutcracker: connected to database successfully")
 	return nil
 }

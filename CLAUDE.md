@@ -20,6 +20,10 @@ At the start of each session, read all previous messages in the conversation thr
 - Git remote: https://github.com/JezisVedToJeMojzis/nut-cracker
 - Developer: Samuel Mojzis (mojzissamuel@gmail.com)
 
+## Conventions
+
+- **Commit messages:** Do NOT add "Co-Authored-By: Claude" or any Claude/AI attribution to commits.
+
 ## Commands
 
 ```bash

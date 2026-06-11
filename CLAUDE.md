@@ -38,7 +38,30 @@ go test ./...
 
 # Single package test
 go test ./internal/somepackage/...
+
+# Start / stop the PostgreSQL container
+docker compose up -d
+docker compose down
+
+# Database migrations (golang-migrate CLI; binary at $(go env GOPATH)/bin/migrate)
+migrate -path internal/db/migrations -database "$DATABASE_URL" up
+migrate -path internal/db/migrations -database "$DATABASE_URL" down 1
+# Create a new migration pair:
+migrate create -ext sql -dir internal/db/migrations -seq <name>
 ```
+
+## Database Schema
+
+Five tables (migration `000001_init`):
+- `users` — accounts (`password_hash` nullable for OAuth-only users)
+- `user_identities` — external logins (Google, etc.); PK `(provider, provider_user_id)`
+- `countries` — ISO 3166-1 alpha-2 reference list (`code`, `name`)
+- `user_countries` — colored countries; `cracks` int (>=1) = people cracked with from that country; PK `(user_id, country_code)`
+- `friendships` — request/accept model (`status`: pending|accepted)
+
+**Hard rule:** a user's map is visible only to themselves and their accepted friends. Enforce this authorization on every map-read endpoint (return 403 otherwise).
+
+**Auth:** Google OAuth required, plus email/password. Build auth last, but schema already supports it.
 
 ## Architecture
 

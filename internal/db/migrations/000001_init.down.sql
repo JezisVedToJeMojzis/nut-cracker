@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS friendships;
+DROP TABLE IF EXISTS user_countries;
+DROP TABLE IF EXISTS countries;
+DROP TABLE IF EXISTS user_identities;
+DROP TABLE IF EXISTS users;

@@ -11,6 +11,7 @@ import (
 // Config holds all runtime configuration for the application.
 type Config struct {
 	DatabaseURL string
+	HTTPAddr    string
 }
 
 // Load reads configuration from the environment. In development it first
@@ -25,7 +26,13 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("DATABASE_URL is not set")
 	}
 
+	httpAddr := os.Getenv("HTTP_ADDR")
+	if httpAddr == "" {
+		httpAddr = ":8080"
+	}
+
 	return &Config{
 		DatabaseURL: dbURL,
+		HTTPAddr:    httpAddr,
 	}, nil
 }

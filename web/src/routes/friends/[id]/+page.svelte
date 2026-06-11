@@ -23,7 +23,7 @@
 			const next: Record<string, number> = {};
 			for (const c of list) next[c.country_code] = c.cracks;
 			cracks = next;
-			username = friends.find((f) => f.id === owner)?.username ?? owner;
+			username = friends.find((f) => String(f.id) === owner)?.username ?? owner;
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {

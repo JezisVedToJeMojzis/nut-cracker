@@ -32,7 +32,7 @@ type CountryCount struct {
 }
 
 // List returns all countries the given user has cracked.
-func (s *Store) List(ctx context.Context, userID string) ([]CountryCount, error) {
+func (s *Store) List(ctx context.Context, userID int64) ([]CountryCount, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT country_code, cracks FROM user_countries
 		 WHERE user_id = $1 ORDER BY country_code`, userID)
@@ -54,7 +54,7 @@ func (s *Store) List(ctx context.Context, userID string) ([]CountryCount, error)
 
 // Increment adds one crack for the country, creating the entry at 1 if absent.
 // Returns the new crack count.
-func (s *Store) Increment(ctx context.Context, userID, code string) (int, error) {
+func (s *Store) Increment(ctx context.Context, userID int64, code string) (int, error) {
 	var cracks int
 	err := s.db.QueryRow(ctx,
 		`INSERT INTO user_countries (user_id, country_code, cracks)
@@ -72,7 +72,7 @@ func (s *Store) Increment(ctx context.Context, userID, code string) (int, error)
 // Decrement removes one crack. When the count would drop to zero the country is
 // removed from the map. Returns the new count and whether the country was
 // removed. Returns ErrCountryNotFound if the user has not cracked the country.
-func (s *Store) Decrement(ctx context.Context, userID, code string) (newCount int, removed bool, err error) {
+func (s *Store) Decrement(ctx context.Context, userID int64, code string) (newCount int, removed bool, err error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return 0, false, fmt.Errorf("begin tx: %w", err)
@@ -117,7 +117,7 @@ func (s *Store) Decrement(ctx context.Context, userID, code string) (newCount in
 
 // Remove deletes a country from the user's map entirely. Returns
 // ErrCountryNotFound if it was not present.
-func (s *Store) Remove(ctx context.Context, userID, code string) error {
+func (s *Store) Remove(ctx context.Context, userID int64, code string) error {
 	tag, err := s.db.Exec(ctx,
 		`DELETE FROM user_countries WHERE user_id = $1 AND country_code = $2`,
 		userID, code)
@@ -132,7 +132,7 @@ func (s *Store) Remove(ctx context.Context, userID, code string) error {
 
 // CanView reports whether viewer is allowed to see owner's map: true if they are
 // the same user or are accepted friends in either direction.
-func (s *Store) CanView(ctx context.Context, viewerID, ownerID string) (bool, error) {
+func (s *Store) CanView(ctx context.Context, viewerID, ownerID int64) (bool, error) {
 	if viewerID == ownerID {
 		return true, nil
 	}

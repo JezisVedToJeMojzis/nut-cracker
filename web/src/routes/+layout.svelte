@@ -6,8 +6,11 @@
 
 	let { children } = $props();
 
-	let editingId = $state(false);
-	const shortId = $derived(user.id ? user.id.slice(0, 8) + '…' : '');
+	let signInValue = $state('');
+	function signIn() {
+		const v = signInValue.trim();
+		if (v) user.id = v;
+	}
 </script>
 
 <svelte:head>
@@ -30,24 +33,24 @@
 		<a href="/" class:active={page.url.pathname === '/'}>My Map</a>
 		<a href="/friends" class:active={page.url.pathname.startsWith('/friends')}>Friends</a>
 		<a href="/settings" class:active={page.url.pathname.startsWith('/settings')}>Settings</a>
+		<a href="/profile" class:active={page.url.pathname.startsWith('/profile')}>Profile</a>
 	</nav>
 
 	<div class="user">
-		{#if editingId || !user.id}
+		{#if !user.id}
 			<input
 				class="input"
 				type="text"
-				placeholder="paste your user UUID"
-				value={user.id}
-				oninput={(e) => (user.id = (e.target as HTMLInputElement).value)}
-				onblur={() => (editingId = false)}
-				onkeydown={(e) => e.key === 'Enter' && (editingId = false)}
+				inputmode="numeric"
+				placeholder="enter your ID"
+				bind:value={signInValue}
+				onkeydown={(e) => e.key === 'Enter' && signIn()}
 			/>
 		{:else}
-			<button class="chip" onclick={() => (editingId = true)} title="Click to change user ID">
+			<a class="chip" href="/profile" title="View your profile">
 				<span class="dot"></span>
-				{shortId}
-			</button>
+				{user.username ? user.username : `ID ${user.id}`}
+			</a>
 		{/if}
 	</div>
 </header>

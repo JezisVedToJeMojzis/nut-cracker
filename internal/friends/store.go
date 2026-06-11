@@ -37,14 +37,14 @@ func NewStore(db *pgxpool.Pool) *Store {
 
 // User is a minimal user reference returned in listings.
 type User struct {
-	ID       string `json:"id"`
+	ID       int64  `json:"id"`
 	Username string `json:"username"`
 }
 
 // SendRequest creates a pending request from -> to. If a reciprocal pending
 // request (to -> from) already exists, it is accepted instead and accepted=true
 // is returned.
-func (s *Store) SendRequest(ctx context.Context, from, to string) (accepted bool, err error) {
+func (s *Store) SendRequest(ctx context.Context, from, to int64) (accepted bool, err error) {
 	if from == to {
 		return false, ErrSelf
 	}
@@ -105,7 +105,7 @@ func (s *Store) SendRequest(ctx context.Context, from, to string) (accepted bool
 }
 
 // Accept marks a pending request (requester -> recipient) as accepted.
-func (s *Store) Accept(ctx context.Context, recipient, requester string) error {
+func (s *Store) Accept(ctx context.Context, recipient, requester int64) error {
 	tag, err := s.db.Exec(ctx,
 		`UPDATE friendships SET status = 'accepted'
 		 WHERE user_id = $1 AND friend_id = $2 AND status = 'pending'`,
@@ -121,7 +121,7 @@ func (s *Store) Accept(ctx context.Context, recipient, requester string) error {
 
 // Decline rejects a pending request (requester -> recipient) by deleting it.
 // Returns ErrRequestNotFound if no such pending request exists.
-func (s *Store) Decline(ctx context.Context, recipient, requester string) error {
+func (s *Store) Decline(ctx context.Context, recipient, requester int64) error {
 	tag, err := s.db.Exec(ctx,
 		`DELETE FROM friendships
 		 WHERE user_id = $1 AND friend_id = $2 AND status = 'pending'`,
@@ -137,7 +137,7 @@ func (s *Store) Decline(ctx context.Context, recipient, requester string) error 
 
 // Remove deletes any relationship between the two users (accepted or pending),
 // covering unfriend, cancel-request, and decline-request.
-func (s *Store) Remove(ctx context.Context, userID, otherID string) error {
+func (s *Store) Remove(ctx context.Context, userID, otherID int64) error {
 	tag, err := s.db.Exec(ctx,
 		`DELETE FROM friendships
 		 WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)`,
@@ -152,7 +152,7 @@ func (s *Store) Remove(ctx context.Context, userID, otherID string) error {
 }
 
 // ListFriends returns accepted friends of the user (either direction).
-func (s *Store) ListFriends(ctx context.Context, userID string) ([]User, error) {
+func (s *Store) ListFriends(ctx context.Context, userID int64) ([]User, error) {
 	return s.queryUsers(ctx,
 		`SELECT u.id, u.username FROM friendships f
 		 JOIN users u ON u.id = CASE WHEN f.user_id = $1 THEN f.friend_id ELSE f.user_id END
@@ -161,7 +161,7 @@ func (s *Store) ListFriends(ctx context.Context, userID string) ([]User, error) 
 }
 
 // ListIncoming returns users who have sent the user a pending request.
-func (s *Store) ListIncoming(ctx context.Context, userID string) ([]User, error) {
+func (s *Store) ListIncoming(ctx context.Context, userID int64) ([]User, error) {
 	return s.queryUsers(ctx,
 		`SELECT u.id, u.username FROM friendships f
 		 JOIN users u ON u.id = f.user_id
@@ -170,7 +170,7 @@ func (s *Store) ListIncoming(ctx context.Context, userID string) ([]User, error)
 }
 
 // ListOutgoing returns users the user has sent a pending request to.
-func (s *Store) ListOutgoing(ctx context.Context, userID string) ([]User, error) {
+func (s *Store) ListOutgoing(ctx context.Context, userID int64) ([]User, error) {
 	return s.queryUsers(ctx,
 		`SELECT u.id, u.username FROM friendships f
 		 JOIN users u ON u.id = f.friend_id
@@ -178,7 +178,7 @@ func (s *Store) ListOutgoing(ctx context.Context, userID string) ([]User, error)
 		 ORDER BY u.username`, userID)
 }
 
-func (s *Store) queryUsers(ctx context.Context, sql, userID string) ([]User, error) {
+func (s *Store) queryUsers(ctx context.Context, sql string, userID int64) ([]User, error) {
 	rows, err := s.db.Query(ctx, sql, userID)
 	if err != nil {
 		return nil, fmt.Errorf("querying users: %w", err)

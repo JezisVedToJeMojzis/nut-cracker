@@ -26,7 +26,7 @@ func NewStore(db *pgxpool.Pool) *Store {
 }
 
 // Get returns the user's settings, or defaults if none have been saved yet.
-func (s *Store) Get(ctx context.Context, userID string) (Settings, error) {
+func (s *Store) Get(ctx context.Context, userID int64) (Settings, error) {
 	var out Settings
 	err := s.db.QueryRow(ctx,
 		`SELECT count_mode FROM user_settings WHERE user_id = $1`, userID).
@@ -41,7 +41,7 @@ func (s *Store) Get(ctx context.Context, userID string) (Settings, error) {
 }
 
 // Update upserts the user's settings and returns the stored values.
-func (s *Store) Update(ctx context.Context, userID string, in Settings) (Settings, error) {
+func (s *Store) Update(ctx context.Context, userID int64, in Settings) (Settings, error) {
 	var out Settings
 	err := s.db.QueryRow(ctx,
 		`INSERT INTO user_settings (user_id, count_mode)

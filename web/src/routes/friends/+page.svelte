@@ -7,10 +7,12 @@
 		acceptRequest,
 		declineRequest,
 		removeFriend,
-		type Friend
+		getCard,
+		type Friend,
+		type UserCard
 	} from '$lib/api';
 	import { user } from '$lib/user.svelte';
-	import { fade, slide } from 'svelte/transition';
+	import { slide } from 'svelte/transition';
 
 	const initials = (name: string) => name.slice(0, 2).toUpperCase();
 
@@ -18,8 +20,32 @@
 	let incoming = $state<Friend[]>([]);
 	let outgoing = $state<Friend[]>([]);
 	let targetId = $state('');
+	let match = $state<UserCard | null>(null);
+	let lookupError = $state('');
 	let error = $state('');
 	let notice = $state('');
+
+	let lookupTimer: ReturnType<typeof setTimeout> | undefined;
+	function onTargetInput() {
+		match = null;
+		lookupError = '';
+		clearTimeout(lookupTimer);
+		lookupTimer = setTimeout(lookup, 300);
+	}
+
+	async function lookup() {
+		const id = Number(targetId.trim());
+		if (!targetId.trim() || !Number.isInteger(id) || id <= 0) return;
+		if (String(id) === user.id) {
+			lookupError = "That's your own ID.";
+			return;
+		}
+		try {
+			match = await getCard(user.id, id);
+		} catch {
+			lookupError = 'No user with that ID.';
+		}
+	}
 
 	$effect(() => {
 		if (user.id) refresh(user.id);
@@ -51,9 +77,12 @@
 	}
 
 	function send() {
-		if (!targetId.trim()) return;
-		const to = targetId.trim();
-		act(() => sendRequest(user.id, to), 'Request sent.').then(() => (targetId = ''));
+		if (!match) return;
+		const m = match;
+		act(() => sendRequest(user.id, m.id), `Request sent to ${m.username}.`).then(() => {
+			targetId = '';
+			match = null;
+		});
 	}
 </script>
 
@@ -72,12 +101,22 @@
 			<input
 				class="input"
 				type="text"
+				inputmode="numeric"
 				bind:value={targetId}
-				placeholder="friend's user UUID"
+				oninput={onTargetInput}
+				placeholder="friend's ID (a number)"
 				onkeydown={(e) => e.key === 'Enter' && send()}
 			/>
-			<button class="btn" onclick={send}>Send request</button>
+			<button class="btn" disabled={!match} onclick={send}>Send request</button>
 		</div>
+		{#if match}
+			<p class="preview" transition:slide>
+				<span class="avatar small-av">{initials(match.username)}</span>
+				Found <strong>{match.username}</strong> — send them a request?
+			</p>
+		{:else if lookupError}
+			<p class="preview err" transition:slide>{lookupError}</p>
+		{/if}
 	</section>
 
 	{#if incoming.length > 0}
@@ -185,6 +224,22 @@
 	.row .input {
 		flex: 1;
 		max-width: 380px;
+	}
+	.preview {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0.75rem 0 0;
+		font-size: 0.9rem;
+		color: var(--text);
+	}
+	.preview.err {
+		color: var(--danger);
+	}
+	.small-av {
+		width: 26px;
+		height: 26px;
+		font-size: 0.7rem;
 	}
 	ul {
 		list-style: none;

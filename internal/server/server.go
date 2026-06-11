@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nutcracker/internal/friends"
 	"nutcracker/internal/settings"
 	"nutcracker/internal/usermap"
+	"nutcracker/internal/users"
 )
 
 // Server holds dependencies shared across HTTP handlers.
@@ -20,6 +22,7 @@ type Server struct {
 	maps     *usermap.Store
 	friends  *friends.Store
 	settings *settings.Store
+	users    *users.Store
 }
 
 // New creates a Server with the given database pool.
@@ -29,6 +32,7 @@ func New(db *pgxpool.Pool) *Server {
 		maps:     usermap.NewStore(db),
 		friends:  friends.NewStore(db),
 		settings: settings.NewStore(db),
+		users:    users.NewStore(db),
 	}
 }
 
@@ -36,6 +40,11 @@ func New(db *pgxpool.Pool) *Server {
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.handleHealth)
+
+	mux.HandleFunc("GET /users/{id}", s.handleGetProfile)
+	mux.HandleFunc("PATCH /users/{id}", s.handleUpdateProfile)
+	mux.HandleFunc("GET /users/{id}/card", s.handleGetCard)
+
 	mux.HandleFunc("GET /users/{id}/map", s.handleGetMap)
 	mux.HandleFunc("POST /users/{id}/countries/{code}/increment", s.handleIncrement)
 	mux.HandleFunc("POST /users/{id}/countries/{code}/decrement", s.handleDecrement)
@@ -65,14 +74,97 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, code, map[string]string{"status": status})
 }
 
-// handleGetMap returns a user's map, enforcing friends-only visibility.
-func (s *Server) handleGetMap(w http.ResponseWriter, r *http.Request) {
-	viewer := currentUser(r)
-	if viewer == "" {
-		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+// handleGetProfile returns the caller's full profile. Self only.
+func (s *Server) handleGetProfile(w http.ResponseWriter, r *http.Request) {
+	caller, ok := requireUser(w, r)
+	if !ok {
 		return
 	}
-	ownerID := r.PathValue("id")
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	if caller != id {
+		writeError(w, http.StatusForbidden, "cannot view another user's profile")
+		return
+	}
+	p, err := s.users.GetByID(r.Context(), id)
+	if errors.Is(err, users.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+// handleUpdateProfile updates the caller's username. Self only.
+func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
+	caller, ok := requireUser(w, r)
+	if !ok {
+		return
+	}
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	if caller != id {
+		writeError(w, http.StatusForbidden, "cannot edit another user's profile")
+		return
+	}
+	var body struct {
+		Username string `json:"username"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	p, err := s.users.UpdateUsername(r.Context(), id, body.Username)
+	switch {
+	case errors.Is(err, users.ErrInvalidUsername):
+		writeError(w, http.StatusBadRequest, "username must be 2-30 characters")
+	case errors.Is(err, users.ErrUsernameTaken):
+		writeError(w, http.StatusConflict, "username already taken")
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "internal error")
+	default:
+		writeJSON(w, http.StatusOK, p)
+	}
+}
+
+// handleGetCard returns a user's public card (id + username) for search.
+func (s *Server) handleGetCard(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireUser(w, r); !ok {
+		return
+	}
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	u, err := s.users.LookupByID(r.Context(), id)
+	if errors.Is(err, users.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "no user with that id")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, u)
+}
+
+// handleGetMap returns a user's map, enforcing friends-only visibility.
+func (s *Server) handleGetMap(w http.ResponseWriter, r *http.Request) {
+	viewer, ok := requireUser(w, r)
+	if !ok {
+		return
+	}
+	ownerID, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
 
 	allowed, err := s.maps.CanView(r.Context(), viewer, ownerID)
 	if err != nil {
@@ -151,16 +243,15 @@ func (s *Server) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 // handleSendRequest sends a friend request from the caller to body.To.
 func (s *Server) handleSendRequest(w http.ResponseWriter, r *http.Request) {
-	caller := currentUser(r)
-	if caller == "" {
-		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+	caller, ok := requireUser(w, r)
+	if !ok {
 		return
 	}
 
 	var body struct {
-		To string `json:"to"`
+		To int64 `json:"to"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.To == "" {
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.To == 0 {
 		writeError(w, http.StatusBadRequest, "expected JSON body with a 'to' user id")
 		return
 	}
@@ -188,12 +279,14 @@ func (s *Server) handleSendRequest(w http.ResponseWriter, r *http.Request) {
 
 // handleAcceptRequest accepts a pending request addressed to the caller.
 func (s *Server) handleAcceptRequest(w http.ResponseWriter, r *http.Request) {
-	caller := currentUser(r)
-	if caller == "" {
-		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+	caller, ok := requireUser(w, r)
+	if !ok {
 		return
 	}
-	requester := r.PathValue("requesterId")
+	requester, ok := pathID(w, r, "requesterId")
+	if !ok {
+		return
+	}
 
 	err := s.friends.Accept(r.Context(), caller, requester)
 	switch {
@@ -208,12 +301,14 @@ func (s *Server) handleAcceptRequest(w http.ResponseWriter, r *http.Request) {
 
 // handleDeclineRequest declines a pending request addressed to the caller.
 func (s *Server) handleDeclineRequest(w http.ResponseWriter, r *http.Request) {
-	caller := currentUser(r)
-	if caller == "" {
-		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+	caller, ok := requireUser(w, r)
+	if !ok {
 		return
 	}
-	requester := r.PathValue("requesterId")
+	requester, ok := pathID(w, r, "requesterId")
+	if !ok {
+		return
+	}
 
 	err := s.friends.Decline(r.Context(), caller, requester)
 	switch {
@@ -228,12 +323,15 @@ func (s *Server) handleDeclineRequest(w http.ResponseWriter, r *http.Request) {
 
 // handleRemoveFriend removes any relationship between caller and {otherId}.
 func (s *Server) handleRemoveFriend(w http.ResponseWriter, r *http.Request) {
-	caller := currentUser(r)
-	if caller == "" {
-		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+	caller, ok := requireUser(w, r)
+	if !ok {
 		return
 	}
-	err := s.friends.Remove(r.Context(), caller, r.PathValue("otherId"))
+	other, ok := pathID(w, r, "otherId")
+	if !ok {
+		return
+	}
+	err := s.friends.Remove(r.Context(), caller, other)
 	switch {
 	case errors.Is(err, friends.ErrNotFound):
 		writeError(w, http.StatusNotFound, "no relationship to remove")
@@ -258,31 +356,33 @@ func (s *Server) handleListOutgoing(w http.ResponseWriter, r *http.Request) {
 
 // listFriendsBy runs a listing function for the caller and writes the result
 // under the given JSON key.
-func (s *Server) listFriendsBy(w http.ResponseWriter, r *http.Request, list func(context.Context, string) ([]friends.User, error), key string) {
-	caller := currentUser(r)
-	if caller == "" {
-		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+func (s *Server) listFriendsBy(w http.ResponseWriter, r *http.Request, list func(context.Context, int64) ([]friends.User, error), key string) {
+	caller, ok := requireUser(w, r)
+	if !ok {
 		return
 	}
-	users, err := list(r.Context(), caller)
+	list2, err := list(r.Context(), caller)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if users == nil {
-		users = []friends.User{}
+	if list2 == nil {
+		list2 = []friends.User{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{key: users})
+	writeJSON(w, http.StatusOK, map[string]any{key: list2})
 }
 
 // handleGetSettings returns the caller's settings. Self only.
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
-	caller := currentUser(r)
-	if caller == "" {
-		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+	caller, ok := requireUser(w, r)
+	if !ok {
 		return
 	}
-	if caller != r.PathValue("id") {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	if caller != id {
 		writeError(w, http.StatusForbidden, "cannot read another user's settings")
 		return
 	}
@@ -296,12 +396,15 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 
 // handleUpdateSettings upserts the caller's settings. Self only.
 func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
-	caller := currentUser(r)
-	if caller == "" {
-		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+	caller, ok := requireUser(w, r)
+	if !ok {
 		return
 	}
-	if caller != r.PathValue("id") {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	if caller != id {
 		writeError(w, http.StatusForbidden, "cannot modify another user's settings")
 		return
 	}
@@ -321,24 +424,46 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 // requireSelf checks that the caller is acting on their own map. It returns the
 // user ID, country code, and ok=false (after writing an error) when the caller
 // is unauthenticated or targeting someone else's map.
-func (s *Server) requireSelf(w http.ResponseWriter, r *http.Request) (userID, code string, ok bool) {
-	viewer := currentUser(r)
-	if viewer == "" {
-		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
-		return "", "", false
+func (s *Server) requireSelf(w http.ResponseWriter, r *http.Request) (userID int64, code string, ok bool) {
+	viewer, ok := requireUser(w, r)
+	if !ok {
+		return 0, "", false
 	}
-	ownerID := r.PathValue("id")
+	ownerID, ok := pathID(w, r, "id")
+	if !ok {
+		return 0, "", false
+	}
 	if viewer != ownerID {
 		writeError(w, http.StatusForbidden, "cannot modify another user's map")
-		return "", "", false
+		return 0, "", false
 	}
 	return ownerID, r.PathValue("code"), true
 }
 
-// currentUser extracts the acting user's ID. Temporary stand-in for real auth:
-// reads the X-User-ID header. To be replaced by Google OAuth / sessions.
-func currentUser(r *http.Request) string {
-	return r.Header.Get("X-User-ID")
+// requireUser extracts and validates the acting user's id from the X-User-ID
+// header. Temporary stand-in for real auth (Google OAuth / sessions).
+func requireUser(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	raw := r.Header.Get("X-User-ID")
+	if raw == "" {
+		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
+		return 0, false
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "invalid X-User-ID")
+		return 0, false
+	}
+	return id, true
+}
+
+// pathID parses a numeric path value, writing a 400 on failure.
+func pathID(w http.ResponseWriter, r *http.Request, name string) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue(name), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid "+name)
+		return 0, false
+	}
+	return id, true
 }
 
 // writeJSON writes v as a JSON response with the given status code.

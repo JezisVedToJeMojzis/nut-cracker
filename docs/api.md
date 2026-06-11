@@ -5,9 +5,30 @@ Base URL (dev): `http://localhost:8080`
 ## Authentication (temporary)
 
 Real auth (Google OAuth + email/password) is not built yet. As a stand-in, the
-acting user is identified by the **`X-User-ID`** header containing their user
-UUID. This will be replaced by proper sessions/OAuth without changing endpoint
+acting user is identified by the **`X-User-ID`** header containing their numeric
+user id. This will be replaced by proper sessions/OAuth without changing endpoint
 shapes.
+
+## Users / Profile
+
+### `GET /users/{id}`
+The caller's full profile (includes email). Self only (`403` otherwise).
+
+```json
+{ "id": 1, "username": "alice", "email": "a@b.com", "created_at": "..." }
+```
+
+### `PATCH /users/{id}`
+Update the caller's username. Self only. Body `{ "username": "newname" }`.
+`400` invalid (2-30 chars) · `409` username taken.
+
+### `GET /users/{id}/card`
+Public card (id + username) for friend search — lets the caller see who an id
+belongs to before adding. `404` if no such user.
+
+```json
+{ "id": 2, "username": "bob" }
+```
 
 ## Endpoints
 

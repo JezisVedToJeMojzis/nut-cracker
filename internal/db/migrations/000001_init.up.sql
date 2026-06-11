@@ -1,9 +1,8 @@
--- Enable UUID generation (gen_random_uuid is built into pgcrypto / core in PG13+).
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
--- Accounts.
+-- Accounts. The id is a sequential BIGINT (the primary key, automatically
+-- indexed) used as the short, shareable, orderable user id. username is the
+-- editable display name.
 CREATE TABLE IF NOT EXISTS users (
-    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     email         TEXT NOT NULL UNIQUE,
     username      TEXT NOT NULL UNIQUE,
     password_hash TEXT,                -- nullable: Google-only users have no password
@@ -12,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- External login identities (Google now; email/password and others later).
 CREATE TABLE IF NOT EXISTS user_identities (
-    user_id          UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     provider         TEXT NOT NULL,    -- e.g. 'google'
     provider_user_id TEXT NOT NULL,    -- stable ID from the provider
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -29,7 +28,7 @@ CREATE TABLE IF NOT EXISTS countries (
 
 -- Countries a user has "cracked", with how many people from that country.
 CREATE TABLE IF NOT EXISTS user_countries (
-    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     country_code TEXT NOT NULL REFERENCES countries(code),
     cracks       INTEGER NOT NULL DEFAULT 1 CHECK (cracks >= 1),
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -39,8 +38,8 @@ CREATE TABLE IF NOT EXISTS user_countries (
 
 -- Friend relationships (request + accept model).
 CREATE TABLE IF NOT EXISTS friendships (
-    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    friend_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    friend_id  BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (user_id, friend_id),

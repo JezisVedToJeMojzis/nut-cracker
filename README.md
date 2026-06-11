@@ -33,7 +33,10 @@ docker compose up -d
 # 3. Apply database migrations
 migrate -path internal/db/migrations -database "$DATABASE_URL" up
 
-# 4. Run the server
+# 4. Seed the countries table (downloads the ISO 3166-1 list, idempotent)
+go run ./cmd/seed-countries
+
+# 5. Run the server
 go run ./cmd/nutcracker
 ```
 

@@ -36,8 +36,8 @@
 		<a href="/profile" class:active={page.url.pathname.startsWith('/profile')}>Profile</a>
 	</nav>
 
-	<div class="user">
-		{#if !user.id}
+	{#if !user.id}
+		<div class="user">
 			<input
 				class="input"
 				type="text"
@@ -46,13 +46,8 @@
 				bind:value={signInValue}
 				onkeydown={(e) => e.key === 'Enter' && signIn()}
 			/>
-		{:else}
-			<a class="chip" href="/profile" title="View your profile">
-				<span class="dot"></span>
-				{user.username ? user.username : `ID ${user.id}`}
-			</a>
-		{/if}
-	</div>
+		</div>
+	{/if}
 </header>
 
 <main>
@@ -114,34 +109,8 @@
 		margin-left: auto;
 	}
 	.user .input {
-		min-width: 280px;
+		min-width: 220px;
 		font-size: 0.82rem;
-	}
-	.chip {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.4rem 0.8rem;
-		border: 1px solid var(--border);
-		border-radius: 999px;
-		background: var(--surface);
-		color: var(--text);
-		font: inherit;
-		font-size: 0.82rem;
-		font-weight: 500;
-		cursor: pointer;
-		box-shadow: var(--shadow-sm);
-		transition: box-shadow 0.15s var(--ease);
-	}
-	.chip:hover {
-		box-shadow: var(--shadow);
-	}
-	.dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		background: var(--primary);
-		box-shadow: 0 0 0 3px var(--primary-soft);
 	}
 	main {
 		max-width: 1100px;

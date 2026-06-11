@@ -29,6 +29,7 @@
 	<nav>
 		<a href="/" class:active={page.url.pathname === '/'}>My Map</a>
 		<a href="/friends" class:active={page.url.pathname.startsWith('/friends')}>Friends</a>
+		<a href="/settings" class:active={page.url.pathname.startsWith('/settings')}>Settings</a>
 	</nav>
 
 	<div class="user">

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import WorldMap from '$lib/WorldMap.svelte';
-	import { getMap, increment, decrement, getSettings, updateSettings } from '$lib/api';
+	import { getMap, increment, decrement, getSettings } from '$lib/api';
 	import { user } from '$lib/user.svelte';
 
 	let countMode = $state(false);
@@ -30,22 +30,6 @@
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
 			loading = false;
-		}
-	}
-
-	async function toggleCountMode() {
-		if (!user.id) {
-			error = 'Set your user ID first';
-			return;
-		}
-		const next = !countMode;
-		countMode = next; // optimistic
-		try {
-			const st = await updateSettings(user.id, { count_mode: next });
-			countMode = st.count_mode;
-		} catch (e) {
-			countMode = !next; // revert on failure
-			error = e instanceof Error ? e.message : String(e);
 		}
 	}
 
@@ -102,20 +86,15 @@
 		<p>Enter your user ID in the top-right to load your map.</p>
 	</div>
 {:else}
-	<div class="card controls">
-		<label class="switch">
-			<input type="checkbox" checked={countMode} onchange={toggleCountMode} />
-			<span class="track"><span class="thumb"></span></span>
-			<span class="switch-label">
-				Count mode
-				<span class="muted small">
-					{countMode ? 'left-click adds a crack' : 'left-click marks a country'}
-				</span>
-			</span>
-		</label>
-		<span class="muted small hint">Right-click a country to remove one</span>
+	<p class="instructions muted small">
+		{#if countMode}
+			<strong>Count mode on</strong> · left-click adds a crack, right-click removes one.
+		{:else}
+			Left-click to mark a country, right-click to remove it.
+		{/if}
+		Drag to pan, scroll or pinch to zoom.
 		{#if loading}<span class="spinner"></span>{/if}
-	</div>
+	</p>
 {/if}
 
 {#if error}<p class="error">⚠️ {error}</p>{/if}
@@ -158,19 +137,15 @@
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 	}
-	.controls {
+	.instructions {
+		margin: 0 0 1rem;
 		display: flex;
 		align-items: center;
-		gap: 1.25rem;
-		padding: 0.85rem 1.1rem;
-		margin-bottom: 1rem;
+		gap: 0.4rem;
 		flex-wrap: wrap;
 	}
 	.small {
-		font-size: 0.8rem;
-	}
-	.hint {
-		margin-left: auto;
+		font-size: 0.85rem;
 	}
 	.empty {
 		display: flex;
@@ -188,57 +163,5 @@
 	.error {
 		color: var(--danger);
 		font-size: 0.9rem;
-	}
-
-	/* toggle switch */
-	.switch {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.65rem;
-		cursor: pointer;
-		user-select: none;
-	}
-	.switch input {
-		position: absolute;
-		opacity: 0;
-		pointer-events: none;
-	}
-	.track {
-		position: relative;
-		width: 42px;
-		height: 24px;
-		border-radius: 999px;
-		background: var(--surface-2);
-		border: 1px solid var(--border);
-		transition: background 0.2s var(--ease);
-		flex-shrink: 0;
-	}
-	.thumb {
-		position: absolute;
-		top: 2px;
-		left: 2px;
-		width: 18px;
-		height: 18px;
-		border-radius: 50%;
-		background: white;
-		box-shadow: var(--shadow-sm);
-		transition: transform 0.2s var(--ease);
-	}
-	.switch input:checked + .track {
-		background: var(--primary);
-		border-color: var(--primary);
-	}
-	.switch input:checked + .track .thumb {
-		transform: translateX(18px);
-	}
-	.switch input:focus-visible + .track {
-		box-shadow: var(--ring);
-	}
-	.switch-label {
-		display: flex;
-		flex-direction: column;
-		font-size: 0.9rem;
-		font-weight: 500;
-		line-height: 1.2;
 	}
 </style>

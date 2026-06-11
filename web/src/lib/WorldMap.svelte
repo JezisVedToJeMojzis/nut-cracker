@@ -85,7 +85,6 @@
 	}
 
 	function onPointerDown(e: PointerEvent) {
-		viewport!.setPointerCapture(e.pointerId);
 		pointers.set(e.pointerId, localPoint(e));
 		moved = 0;
 		if (pointers.size === 2) {
@@ -220,7 +219,6 @@
 	}
 	.transform {
 		transform-origin: 0 0;
-		will-change: transform;
 	}
 	svg {
 		display: block;

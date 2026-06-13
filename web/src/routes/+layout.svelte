@@ -163,4 +163,30 @@
 			transform: none;
 		}
 	}
+
+	@media (max-width: 560px) {
+		header {
+			gap: 0.5rem 0.75rem;
+			padding: 0.6rem 0.9rem;
+		}
+		.logout {
+			order: 2;
+		}
+		nav {
+			order: 3;
+			width: 100%;
+			overflow-x: auto;
+			flex-wrap: nowrap;
+			scrollbar-width: none;
+		}
+		nav::-webkit-scrollbar {
+			display: none;
+		}
+		nav a {
+			white-space: nowrap;
+		}
+		main {
+			padding: 1.25rem 0.9rem 4rem;
+		}
+	}
 </style>

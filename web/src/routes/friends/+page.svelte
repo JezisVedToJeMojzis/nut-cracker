@@ -247,6 +247,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		gap: 0.5rem;
+		flex-wrap: wrap;
 		padding: 0.6rem 0.85rem;
 		transition:
 			box-shadow 0.15s var(--ease),

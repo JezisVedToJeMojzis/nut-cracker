@@ -38,7 +38,7 @@
 <p class="muted sub">Enable or disable features for your map.</p>
 
 {#if !user.id}
-	<div class="card empty">Enter your user ID in the top-right to manage settings.</div>
+	<div class="card empty">Loading…</div>
 {:else}
 	{#if error}<p class="error">⚠️ {error}</p>{/if}
 

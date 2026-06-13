@@ -40,22 +40,22 @@
 			return;
 		}
 		try {
-			match = await getCard(user.id, id);
+			match = await getCard(id);
 		} catch {
 			lookupError = 'No user with that ID.';
 		}
 	}
 
 	$effect(() => {
-		if (user.id) refresh(user.id);
+		if (user.id) refresh();
 	});
 
-	async function refresh(id: string) {
+	async function refresh() {
 		try {
 			[friends, incoming, outgoing] = await Promise.all([
-				listFriends(id),
-				listIncoming(id),
-				listOutgoing(id)
+				listFriends(),
+				listIncoming(),
+				listOutgoing()
 			]);
 		} catch (e) {
 			toaster.error(e instanceof Error ? e.message : String(e));
@@ -66,7 +66,7 @@
 		try {
 			await fn();
 			toaster.success(ok);
-			await refresh(user.id);
+			await refresh();
 		} catch (e) {
 			toaster.error(e instanceof Error ? e.message : String(e));
 		}
@@ -75,7 +75,7 @@
 	function send() {
 		if (!match) return;
 		const m = match;
-		act(() => sendRequest(user.id, m.id), `Request sent to ${m.username}.`).then(() => {
+		act(() => sendRequest(m.id), `Request sent to ${m.username}.`).then(() => {
 			targetId = '';
 			match = null;
 		});
@@ -86,7 +86,7 @@
 <p class="muted sub">Add friends to share your map with them.</p>
 
 {#if !user.id}
-	<div class="card empty">Enter your user ID in the top-right to manage friends.</div>
+	<div class="card empty">Loading…</div>
 {:else}
 	<section class="card">
 		<h2>Add a friend</h2>
@@ -123,12 +123,12 @@
 							{f.username}
 						</span>
 						<span class="actions">
-							<button class="btn" onclick={() => act(() => acceptRequest(user.id, f.id), 'Accepted.')}>
+							<button class="btn" onclick={() => act(() => acceptRequest(f.id), 'Accepted.')}>
 								Accept
 							</button>
 							<button
 								class="btn btn-ghost"
-								onclick={() => act(() => declineRequest(user.id, f.id), 'Declined.')}
+								onclick={() => act(() => declineRequest(f.id), 'Declined.')}
 							>
 								Decline
 							</button>
@@ -152,7 +152,7 @@
 						</span>
 						<button
 							class="btn btn-ghost"
-							onclick={() => act(() => removeFriend(user.id, f.id), 'Cancelled.')}
+							onclick={() => act(() => removeFriend(f.id), 'Cancelled.')}
 						>
 							Cancel
 						</button>
@@ -178,7 +178,7 @@
 							<a class="btn" href={`/friends/${f.id}`}>View map</a>
 							<button
 								class="btn btn-danger"
-								onclick={() => act(() => removeFriend(user.id, f.id), 'Removed.')}
+								onclick={() => act(() => removeFriend(f.id), 'Removed.')}
 							>
 								Unfriend
 							</button>

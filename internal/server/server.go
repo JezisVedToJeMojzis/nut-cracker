@@ -7,32 +7,47 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nutcracker/internal/auth"
+	"nutcracker/internal/config"
 	"nutcracker/internal/friends"
+	"nutcracker/internal/mail"
 	"nutcracker/internal/settings"
 	"nutcracker/internal/usermap"
 	"nutcracker/internal/users"
 )
 
+const (
+	sessionCookie = "nc_session"
+	sessionTTL    = 30 * 24 * time.Hour
+)
+
 // Server holds dependencies shared across HTTP handlers.
 type Server struct {
 	db       *pgxpool.Pool
+	cfg      *config.Config
 	maps     *usermap.Store
 	friends  *friends.Store
 	settings *settings.Store
 	users    *users.Store
+	auth     *auth.Store
+	mail     mail.Mailer
 }
 
-// New creates a Server with the given database pool.
-func New(db *pgxpool.Pool) *Server {
+// New creates a Server with the given database pool and config.
+func New(db *pgxpool.Pool, cfg *config.Config) *Server {
 	return &Server{
 		db:       db,
+		cfg:      cfg,
 		maps:     usermap.NewStore(db),
 		friends:  friends.NewStore(db),
 		settings: settings.NewStore(db),
 		users:    users.NewStore(db),
+		auth:     auth.NewStore(db),
+		mail:     mail.New(cfg.ResendAPIKey, cfg.MailFrom),
 	}
 }
 
@@ -40,6 +55,14 @@ func New(db *pgxpool.Pool) *Server {
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.handleHealth)
+
+	mux.HandleFunc("POST /auth/register", s.handleRegister)
+	mux.HandleFunc("POST /auth/login", s.handleLogin)
+	mux.HandleFunc("POST /auth/logout", s.handleLogout)
+	mux.HandleFunc("GET /auth/me", s.handleMe)
+	mux.HandleFunc("GET /auth/verify", s.handleVerifyEmail)
+	mux.HandleFunc("POST /auth/forgot", s.handleForgotPassword)
+	mux.HandleFunc("POST /auth/reset", s.handleResetPassword)
 
 	mux.HandleFunc("GET /users/{id}", s.handleGetProfile)
 	mux.HandleFunc("PATCH /users/{id}", s.handleUpdateProfile)
@@ -76,7 +99,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // handleGetProfile returns the caller's full profile. Self only.
 func (s *Server) handleGetProfile(w http.ResponseWriter, r *http.Request) {
-	caller, ok := requireUser(w, r)
+	caller, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
@@ -102,7 +125,7 @@ func (s *Server) handleGetProfile(w http.ResponseWriter, r *http.Request) {
 
 // handleUpdateProfile updates the caller's username. Self only.
 func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
-	caller, ok := requireUser(w, r)
+	caller, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
@@ -134,7 +157,7 @@ func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 // handleGetCard returns a user's public card (id + username) for search.
 func (s *Server) handleGetCard(w http.ResponseWriter, r *http.Request) {
-	if _, ok := requireUser(w, r); !ok {
+	if _, ok := s.requireUser(w, r); !ok {
 		return
 	}
 	id, ok := pathID(w, r, "id")
@@ -155,7 +178,7 @@ func (s *Server) handleGetCard(w http.ResponseWriter, r *http.Request) {
 
 // handleGetMap returns a user's map, enforcing friends-only visibility.
 func (s *Server) handleGetMap(w http.ResponseWriter, r *http.Request) {
-	viewer, ok := requireUser(w, r)
+	viewer, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
@@ -241,7 +264,7 @@ func (s *Server) handleRemove(w http.ResponseWriter, r *http.Request) {
 
 // handleSendRequest sends a friend request from the caller to body.To.
 func (s *Server) handleSendRequest(w http.ResponseWriter, r *http.Request) {
-	caller, ok := requireUser(w, r)
+	caller, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
@@ -277,7 +300,7 @@ func (s *Server) handleSendRequest(w http.ResponseWriter, r *http.Request) {
 
 // handleAcceptRequest accepts a pending request addressed to the caller.
 func (s *Server) handleAcceptRequest(w http.ResponseWriter, r *http.Request) {
-	caller, ok := requireUser(w, r)
+	caller, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
@@ -299,7 +322,7 @@ func (s *Server) handleAcceptRequest(w http.ResponseWriter, r *http.Request) {
 
 // handleDeclineRequest declines a pending request addressed to the caller.
 func (s *Server) handleDeclineRequest(w http.ResponseWriter, r *http.Request) {
-	caller, ok := requireUser(w, r)
+	caller, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
@@ -321,7 +344,7 @@ func (s *Server) handleDeclineRequest(w http.ResponseWriter, r *http.Request) {
 
 // handleRemoveFriend removes any relationship between caller and {otherId}.
 func (s *Server) handleRemoveFriend(w http.ResponseWriter, r *http.Request) {
-	caller, ok := requireUser(w, r)
+	caller, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
@@ -355,7 +378,7 @@ func (s *Server) handleListOutgoing(w http.ResponseWriter, r *http.Request) {
 // listFriendsBy runs a listing function for the caller and writes the result
 // under the given JSON key.
 func (s *Server) listFriendsBy(w http.ResponseWriter, r *http.Request, list func(context.Context, int64) ([]friends.User, error), key string) {
-	caller, ok := requireUser(w, r)
+	caller, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
@@ -372,7 +395,7 @@ func (s *Server) listFriendsBy(w http.ResponseWriter, r *http.Request, list func
 
 // handleGetSettings returns the caller's settings. Self only.
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
-	caller, ok := requireUser(w, r)
+	caller, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
@@ -394,7 +417,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 
 // handleUpdateSettings upserts the caller's settings. Self only.
 func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
-	caller, ok := requireUser(w, r)
+	caller, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
@@ -423,7 +446,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 // user ID, country code, and ok=false (after writing an error) when the caller
 // is unauthenticated or targeting someone else's map.
 func (s *Server) requireSelf(w http.ResponseWriter, r *http.Request) (userID int64, code string, ok bool) {
-	viewer, ok := requireUser(w, r)
+	viewer, ok := s.requireUser(w, r)
 	if !ok {
 		return 0, "", false
 	}
@@ -438,20 +461,208 @@ func (s *Server) requireSelf(w http.ResponseWriter, r *http.Request) (userID int
 	return ownerID, r.PathValue("code"), true
 }
 
-// requireUser extracts and validates the acting user's id from the X-User-ID
-// header. Temporary stand-in for real auth (Google OAuth / sessions).
-func requireUser(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	raw := r.Header.Get("X-User-ID")
-	if raw == "" {
-		writeError(w, http.StatusUnauthorized, "missing X-User-ID")
-		return 0, false
-	}
-	id, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "invalid X-User-ID")
+// requireUser resolves the acting user's id from the session cookie, writing a
+// 401 if there is no valid session.
+func (s *Server) requireUser(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, ok := s.sessionUser(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "not authenticated")
 		return 0, false
 	}
 	return id, true
+}
+
+// sessionUser returns the user id for the request's session cookie, if valid.
+func (s *Server) sessionUser(r *http.Request) (int64, bool) {
+	c, err := r.Cookie(sessionCookie)
+	if err != nil {
+		return 0, false
+	}
+	id, err := s.auth.UserIDForSession(r.Context(), c.Value)
+	if err != nil {
+		return 0, false
+	}
+	return id, true
+}
+
+// --- Auth handlers -------------------------------------------------------
+
+func (s *Server) setSessionCookie(w http.ResponseWriter, token string, expires time.Time) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookie,
+		Value:    token,
+		Path:     "/",
+		Expires:  expires,
+		HttpOnly: true,
+		Secure:   s.cfg.CookieSecure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (s *Server) clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookie,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   s.cfg.CookieSecure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// startSession creates a session for the user and sets the cookie.
+func (s *Server) startSession(w http.ResponseWriter, r *http.Request, userID int64) error {
+	token, expires, err := s.auth.CreateSession(r.Context(), userID, sessionTTL)
+	if err != nil {
+		return err
+	}
+	s.setSessionCookie(w, token, expires)
+	return nil
+}
+
+// handleRegister creates an account, logs the user in, and emails a
+// verification link.
+func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email    string `json:"email"`
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	userID, verifyToken, err := s.auth.Register(r.Context(), body.Email, body.Username, body.Password)
+	switch {
+	case errors.Is(err, auth.ErrInvalidInput):
+		writeError(w, http.StatusBadRequest, "email, a username (2-30 chars) and an 8+ char password are required")
+		return
+	case errors.Is(err, auth.ErrEmailTaken):
+		writeError(w, http.StatusConflict, "an account with that email already exists")
+		return
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	link := s.cfg.AppBaseURL + "/api/auth/verify?token=" + verifyToken
+	go s.mail.SendVerification(context.Background(), body.Email, link)
+
+	if err := s.startSession(w, r, userID); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	p, _ := s.users.GetByID(r.Context(), userID)
+	writeJSON(w, http.StatusCreated, p)
+}
+
+// handleLogin authenticates and starts a session.
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	userID, err := s.auth.Authenticate(r.Context(), body.Email, body.Password)
+	if errors.Is(err, auth.ErrInvalidCredentials) {
+		writeError(w, http.StatusUnauthorized, "invalid email or password")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if err := s.startSession(w, r, userID); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	p, _ := s.users.GetByID(r.Context(), userID)
+	writeJSON(w, http.StatusOK, p)
+}
+
+// handleLogout deletes the session and clears the cookie.
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		_ = s.auth.DeleteSession(r.Context(), c.Value)
+	}
+	s.clearSessionCookie(w)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// handleMe returns the logged-in user's profile.
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	id, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
+	p, err := s.users.GetByID(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+// handleVerifyEmail consumes a verification token and redirects to the app.
+func (s *Server) handleVerifyEmail(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	userID, err := s.auth.ConsumeToken(r.Context(), token, "verify")
+	if err == nil {
+		_ = s.auth.MarkEmailVerified(r.Context(), userID)
+		http.Redirect(w, r, s.cfg.AppBaseURL+"/?verified=1", http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, s.cfg.AppBaseURL+"/?verified=0", http.StatusSeeOther)
+}
+
+// handleForgotPassword emails a reset link. Always returns 200 to avoid
+// revealing whether an email is registered.
+func (s *Server) handleForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if id, ok, _ := s.auth.UserIDByEmail(r.Context(), body.Email); ok {
+		if token, err := s.auth.CreateToken(r.Context(), id, "reset", 1*time.Hour); err == nil {
+			link := s.cfg.AppBaseURL + "/reset?token=" + token
+			go s.mail.SendPasswordReset(context.Background(), body.Email, link)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// handleResetPassword consumes a reset token and sets a new password.
+func (s *Server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Token    string `json:"token"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	userID, err := s.auth.ConsumeToken(r.Context(), body.Token, "reset")
+	if errors.Is(err, auth.ErrInvalidToken) {
+		writeError(w, http.StatusBadRequest, "invalid or expired reset link")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if err := s.auth.SetPassword(r.Context(), userID, body.Password); err != nil {
+		writeError(w, http.StatusBadRequest, "password must be at least 8 characters")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // pathID parses a numeric path value, writing a 400 on failure.

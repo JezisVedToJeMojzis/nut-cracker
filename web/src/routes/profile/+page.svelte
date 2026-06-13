@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { getProfile, updateUsername, type Profile } from '$lib/api';
+	import { updateUsername, logout, type Profile } from '$lib/api';
 	import { user } from '$lib/user.svelte';
 	import { goto } from '$app/navigation';
+	import { toaster } from '$lib/toast.svelte';
 
 	let profile = $state<Profile | null>(null);
 	let usernameInput = $state('');
@@ -11,19 +12,12 @@
 	let copied = $state(false);
 
 	$effect(() => {
-		if (user.id) load(user.id);
-	});
-
-	async function load(id: string) {
-		error = '';
-		try {
-			profile = await getProfile(id);
-			usernameInput = profile.username;
-			user.username = profile.username; // keep chip in sync
-		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+		const p = user.profile;
+		if (p) {
+			profile = p;
+			usernameInput = p.username;
 		}
-	}
+	});
 
 	async function saveUsername() {
 		if (!profile) return;
@@ -33,7 +27,7 @@
 		try {
 			const updated = await updateUsername(user.id, usernameInput);
 			profile = updated;
-			user.username = updated.username;
+			user.set(updated);
 			notice = 'Username updated.';
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
@@ -49,9 +43,15 @@
 		setTimeout(() => (copied = false), 1500);
 	}
 
-	function signOut() {
-		user.signOut();
-		goto('/');
+	async function signOut() {
+		try {
+			await logout();
+		} catch {
+			/* ignore */
+		}
+		user.set(null);
+		toaster.success('Signed out.');
+		goto('/login');
 	}
 
 	const created = $derived(

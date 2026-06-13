@@ -1,35 +1,42 @@
-// Shared current-user state (temporary auth stand-in).
-// Holds the user's numeric id (sent as X-User-ID) and caches the username for
-// display. Persisted in localStorage.
-import { browser } from '$app/environment';
+// Current-user state, backed by the session cookie. On load we ask the backend
+// who we are (/auth/me); pages read `user.id` / `user.username` reactively.
+import { getMe, type Profile } from './api';
 
-const ID_KEY = 'nutcracker_user_id';
-const NAME_KEY = 'nutcracker_username';
-
-let _id = $state(browser ? (localStorage.getItem(ID_KEY) ?? '') : '');
-let _username = $state(browser ? (localStorage.getItem(NAME_KEY) ?? '') : '');
+let me = $state<Profile | null>(null);
+let ready = $state(false);
 
 export const user = {
+	/** Numeric id as a string (empty when logged out). */
 	get id(): string {
-		return _id;
-	},
-	set id(value: string) {
-		_id = value;
-		if (browser) localStorage.setItem(ID_KEY, value);
+		return me ? String(me.id) : '';
 	},
 	get username(): string {
-		return _username;
+		return me?.username ?? '';
 	},
-	set username(value: string) {
-		_username = value;
-		if (browser) localStorage.setItem(NAME_KEY, value);
+	get email(): string {
+		return me?.email ?? '';
 	},
-	signOut() {
-		_id = '';
-		_username = '';
-		if (browser) {
-			localStorage.removeItem(ID_KEY);
-			localStorage.removeItem(NAME_KEY);
+	get profile(): Profile | null {
+		return me;
+	},
+	get isAuthed(): boolean {
+		return me !== null;
+	},
+	/** True once the initial /auth/me check has completed. */
+	get ready(): boolean {
+		return ready;
+	},
+	/** Set the current user (after login/register). */
+	set(profile: Profile | null) {
+		me = profile;
+	},
+	/** Re-check the session with the backend. */
+	async refresh() {
+		try {
+			me = await getMe();
+		} catch {
+			me = null;
 		}
+		ready = true;
 	}
 };

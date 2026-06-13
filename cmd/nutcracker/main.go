@@ -40,7 +40,7 @@ func run(args []string) error {
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           server.New(pool).Routes(),
+		Handler:           server.New(pool, cfg).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

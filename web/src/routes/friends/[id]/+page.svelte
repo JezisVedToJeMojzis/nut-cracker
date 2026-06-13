@@ -12,14 +12,14 @@
 	const ownerId = $derived(page.params.id ?? '');
 
 	$effect(() => {
-		if (user.id && ownerId) load(user.id, ownerId);
+		if (user.id && ownerId) load(ownerId);
 	});
 
-	async function load(viewer: string, owner: string) {
+	async function load(owner: string) {
 		loading = true;
 		error = '';
 		try {
-			const [list, friends] = await Promise.all([getMap(viewer, owner), listFriends(viewer)]);
+			const [list, friends] = await Promise.all([getMap(owner), listFriends()]);
 			const next: Record<string, number> = {};
 			for (const c of list) next[c.country_code] = c.cracks;
 			cracks = next;

@@ -1,34 +1,13 @@
-// Minimal client for the Nut Cracker backend API.
-// Requests go through the Vite proxy (/api -> http://localhost:8080).
-//
-// Auth is not built yet: the acting user is identified by the X-User-ID header,
-// a temporary stand-in to be replaced by real sessions/OAuth later.
+// Client for the Nut Cracker backend API.
+// Requests go through the Vite proxy (/api -> backend) and rely on the
+// HttpOnly session cookie for authentication (credentials: 'include').
 
-export type CountryCount = {
-	country_code: string;
-	cracks: number;
-};
-
-export type IncrementResult = {
-	country_code: string;
-	cracks: number;
-};
-
-export type DecrementResult = {
-	country_code: string;
-	cracks: number;
-	removed: boolean;
-};
-
-export type Settings = {
-	count_mode: boolean;
-};
-
-export type Friend = {
-	id: number;
-	username: string;
-};
-
+export type CountryCount = { country_code: string; cracks: number };
+export type IncrementResult = { country_code: string; cracks: number };
+export type DecrementResult = { country_code: string; cracks: number; removed: boolean };
+export type Settings = { count_mode: boolean };
+export type Friend = { id: number; username: string };
+export type UserCard = { id: number; username: string };
 export type Profile = {
 	id: number;
 	username: string;
@@ -36,162 +15,98 @@ export type Profile = {
 	created_at: string;
 };
 
-export type UserCard = {
-	id: number;
-	username: string;
-};
-
 const BASE = '/api';
 
-function headers(userId: string): HeadersInit {
-	return {
-		'Content-Type': 'application/json',
-		'X-User-ID': userId
-	};
-}
+type Options = { method?: string; body?: unknown };
 
-async function handle<T>(res: Response): Promise<T> {
+async function req<T>(path: string, opts: Options = {}): Promise<T> {
+	const res = await fetch(`${BASE}${path}`, {
+		method: opts.method ?? 'GET',
+		credentials: 'include',
+		headers: opts.body ? { 'Content-Type': 'application/json' } : undefined,
+		body: opts.body ? JSON.stringify(opts.body) : undefined
+	});
+	if (res.status === 204) return undefined as T;
 	if (!res.ok) {
 		let msg = `request failed (${res.status})`;
 		try {
-			const body = await res.json();
-			if (body?.error) msg = body.error;
+			const b = await res.json();
+			if (b?.error) msg = b.error;
 		} catch {
-			/* ignore non-JSON bodies */
+			/* ignore */
 		}
 		throw new Error(msg);
 	}
 	return res.json() as Promise<T>;
 }
 
-/** Fetch a user's map of cracked countries. */
-export async function getMap(userId: string, ownerId: string): Promise<CountryCount[]> {
-	const res = await fetch(`${BASE}/users/${ownerId}/map`, { headers: headers(userId) });
-	const data = await handle<{ countries: CountryCount[] }>(res);
+// --- Auth ----------------------------------------------------------------
+
+export const register = (email: string, username: string, password: string) =>
+	req<Profile>('/auth/register', { method: 'POST', body: { email, username, password } });
+
+export const login = (email: string, password: string) =>
+	req<Profile>('/auth/login', { method: 'POST', body: { email, password } });
+
+export const logout = () => req<{ ok: boolean }>('/auth/logout', { method: 'POST' });
+
+export const getMe = () => req<Profile>('/auth/me');
+
+export const forgotPassword = (email: string) =>
+	req<{ ok: boolean }>('/auth/forgot', { method: 'POST', body: { email } });
+
+export const resetPassword = (token: string, password: string) =>
+	req<{ ok: boolean }>('/auth/reset', { method: 'POST', body: { token, password } });
+
+// --- Profile -------------------------------------------------------------
+
+export const updateUsername = (userId: string, username: string) =>
+	req<Profile>(`/users/${userId}`, { method: 'PATCH', body: { username } });
+
+export const getCard = (targetId: number) => req<UserCard>(`/users/${targetId}/card`);
+
+// --- Map -----------------------------------------------------------------
+
+export async function getMap(ownerId: string): Promise<CountryCount[]> {
+	const data = await req<{ countries: CountryCount[] }>(`/users/${ownerId}/map`);
 	return data.countries;
 }
 
-/** Add one crack to a country on the caller's own map. */
-export async function increment(userId: string, code: string): Promise<IncrementResult> {
-	const res = await fetch(`${BASE}/users/${userId}/countries/${code}/increment`, {
-		method: 'POST',
-		headers: headers(userId)
-	});
-	return handle<IncrementResult>(res);
-}
+export const increment = (userId: string, code: string) =>
+	req<IncrementResult>(`/users/${userId}/countries/${code}/increment`, { method: 'POST' });
 
-/** Remove one crack; the country is removed from the map when it reaches zero. */
-export async function decrement(userId: string, code: string): Promise<DecrementResult> {
-	const res = await fetch(`${BASE}/users/${userId}/countries/${code}/decrement`, {
-		method: 'POST',
-		headers: headers(userId)
-	});
-	return handle<DecrementResult>(res);
-}
+export const decrement = (userId: string, code: string) =>
+	req<DecrementResult>(`/users/${userId}/countries/${code}/decrement`, { method: 'POST' });
 
-/** Fetch the caller's own full profile. */
-export async function getProfile(userId: string): Promise<Profile> {
-	const res = await fetch(`${BASE}/users/${userId}`, { headers: headers(userId) });
-	return handle<Profile>(res);
-}
+export const remove = (userId: string, code: string) =>
+	req<void>(`/users/${userId}/countries/${code}`, { method: 'DELETE' });
 
-/** Update the caller's username. */
-export async function updateUsername(userId: string, username: string): Promise<Profile> {
-	const res = await fetch(`${BASE}/users/${userId}`, {
-		method: 'PATCH',
-		headers: headers(userId),
-		body: JSON.stringify({ username })
-	});
-	return handle<Profile>(res);
-}
+// --- Settings ------------------------------------------------------------
 
-/** Look up a user's public card (id + username) by their numeric id. */
-export async function getCard(userId: string, targetId: number): Promise<UserCard> {
-	const res = await fetch(`${BASE}/users/${targetId}/card`, { headers: headers(userId) });
-	return handle<UserCard>(res);
-}
+export const getSettings = (userId: string) => req<Settings>(`/users/${userId}/settings`);
 
-/** List the caller's accepted friends. */
-export async function listFriends(userId: string): Promise<Friend[]> {
-	const res = await fetch(`${BASE}/friends`, { headers: headers(userId) });
-	const data = await handle<{ friends: Friend[] }>(res);
-	return data.friends;
-}
+export const updateSettings = (userId: string, settings: Settings) =>
+	req<Settings>(`/users/${userId}/settings`, { method: 'PUT', body: settings });
 
-/** List pending requests received by the caller. */
-export async function listIncoming(userId: string): Promise<Friend[]> {
-	const res = await fetch(`${BASE}/friends/requests/incoming`, { headers: headers(userId) });
-	const data = await handle<{ requests: Friend[] }>(res);
-	return data.requests;
-}
+// --- Friends -------------------------------------------------------------
 
-/** List pending requests sent by the caller. */
-export async function listOutgoing(userId: string): Promise<Friend[]> {
-	const res = await fetch(`${BASE}/friends/requests/outgoing`, { headers: headers(userId) });
-	const data = await handle<{ requests: Friend[] }>(res);
-	return data.requests;
+export async function listFriends(): Promise<Friend[]> {
+	return (await req<{ friends: Friend[] }>('/friends')).friends;
 }
+export async function listIncoming(): Promise<Friend[]> {
+	return (await req<{ requests: Friend[] }>('/friends/requests/incoming')).requests;
+}
+export async function listOutgoing(): Promise<Friend[]> {
+	return (await req<{ requests: Friend[] }>('/friends/requests/outgoing')).requests;
+}
+export const sendRequest = (to: number) =>
+	req<{ status: string }>('/friends/requests', { method: 'POST', body: { to } });
 
-/** Send a friend request to another user by numeric id. */
-export async function sendRequest(userId: string, to: number): Promise<{ status: string }> {
-	const res = await fetch(`${BASE}/friends/requests`, {
-		method: 'POST',
-		headers: headers(userId),
-		body: JSON.stringify({ to })
-	});
-	return handle<{ status: string }>(res);
-}
+export const acceptRequest = (requesterId: number) =>
+	req<unknown>(`/friends/requests/${requesterId}/accept`, { method: 'POST' });
 
-/** Accept a pending request from requesterId. */
-export async function acceptRequest(userId: string, requesterId: number): Promise<void> {
-	const res = await fetch(`${BASE}/friends/requests/${requesterId}/accept`, {
-		method: 'POST',
-		headers: headers(userId)
-	});
-	await handle<unknown>(res);
-}
+export const declineRequest = (requesterId: number) =>
+	req<unknown>(`/friends/requests/${requesterId}/decline`, { method: 'POST' });
 
-/** Decline a pending request from requesterId. */
-export async function declineRequest(userId: string, requesterId: number): Promise<void> {
-	const res = await fetch(`${BASE}/friends/requests/${requesterId}/decline`, {
-		method: 'POST',
-		headers: headers(userId)
-	});
-	await handle<unknown>(res);
-}
-
-/** Remove a relationship (unfriend / cancel / decline) with otherId. */
-export async function removeFriend(userId: string, otherId: number): Promise<void> {
-	const res = await fetch(`${BASE}/friends/${otherId}`, {
-		method: 'DELETE',
-		headers: headers(userId)
-	});
-	if (!res.ok && res.status !== 204) throw new Error(`request failed (${res.status})`);
-}
-
-/** Fetch the caller's settings (feature flags). */
-export async function getSettings(userId: string): Promise<Settings> {
-	const res = await fetch(`${BASE}/users/${userId}/settings`, { headers: headers(userId) });
-	return handle<Settings>(res);
-}
-
-/** Update the caller's settings. */
-export async function updateSettings(userId: string, settings: Settings): Promise<Settings> {
-	const res = await fetch(`${BASE}/users/${userId}/settings`, {
-		method: 'PUT',
-		headers: headers(userId),
-		body: JSON.stringify(settings)
-	});
-	return handle<Settings>(res);
-}
-
-/** Remove a country from the caller's own map entirely. */
-export async function remove(userId: string, code: string): Promise<void> {
-	const res = await fetch(`${BASE}/users/${userId}/countries/${code}`, {
-		method: 'DELETE',
-		headers: headers(userId)
-	});
-	if (!res.ok && res.status !== 204) {
-		throw new Error(`request failed (${res.status})`);
-	}
-}
+export const removeFriend = (otherId: number) =>
+	req<void>(`/friends/${otherId}`, { method: 'DELETE' });

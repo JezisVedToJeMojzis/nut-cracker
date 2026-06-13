@@ -12,6 +12,17 @@ import (
 type Config struct {
 	DatabaseURL string
 	HTTPAddr    string
+
+	// AppBaseURL is the public URL of the frontend, used to build links in
+	// emails (e.g. verification / password reset).
+	AppBaseURL string
+	// CookieSecure marks session cookies Secure (set true behind HTTPS).
+	CookieSecure bool
+
+	// ResendAPIKey enables real email sending; empty falls back to console.
+	ResendAPIKey string
+	// MailFrom is the From address for outgoing emails.
+	MailFrom string
 }
 
 // Load reads configuration from the environment. In development it first
@@ -31,8 +42,22 @@ func Load() (*Config, error) {
 		httpAddr = ":8080"
 	}
 
+	appBaseURL := os.Getenv("APP_BASE_URL")
+	if appBaseURL == "" {
+		appBaseURL = "http://localhost:5173"
+	}
+
+	mailFrom := os.Getenv("MAIL_FROM")
+	if mailFrom == "" {
+		mailFrom = "Nut Cracker <onboarding@resend.dev>"
+	}
+
 	return &Config{
-		DatabaseURL: dbURL,
-		HTTPAddr:    httpAddr,
+		DatabaseURL:  dbURL,
+		HTTPAddr:     httpAddr,
+		AppBaseURL:   appBaseURL,
+		CookieSecure: os.Getenv("COOKIE_SECURE") == "true",
+		ResendAPIKey: os.Getenv("RESEND_API_KEY"),
+		MailFrom:     mailFrom,
 	}, nil
 }

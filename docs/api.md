@@ -2,12 +2,28 @@
 
 Base URL (dev): `http://localhost:8080`
 
-## Authentication (temporary)
+## Authentication
 
-Real auth (Google OAuth + email/password) is not built yet. As a stand-in, the
-acting user is identified by the **`X-User-ID`** header containing their numeric
-user id. This will be replaced by proper sessions/OAuth without changing endpoint
-shapes.
+Email/password auth with **DB-backed sessions**. On login/register the server
+sets an HttpOnly `nc_session` cookie; all subsequent requests are authenticated
+by that cookie (send `credentials: 'include'`). Google OAuth is planned but not
+yet wired up.
+
+- `POST /auth/register` — body `{email, username, password}`; creates the
+  account, logs in (sets cookie), emails a verification link. `409` if the email
+  exists, `400` on invalid input.
+- `POST /auth/login` — body `{email, password}`; sets the session cookie. `401`
+  on bad credentials.
+- `POST /auth/logout` — deletes the session and clears the cookie.
+- `GET /auth/me` — the logged-in user's profile, or `401`.
+- `GET /auth/verify?token=…` — consumes an email-verification token, redirects
+  to the app.
+- `POST /auth/forgot` — body `{email}`; emails a reset link. Always `200` (no
+  account enumeration).
+- `POST /auth/reset` — body `{token, password}`; sets a new password.
+
+Emails are sent via Resend when `RESEND_API_KEY` is set, otherwise logged to the
+server console (development).
 
 ## Users / Profile
 

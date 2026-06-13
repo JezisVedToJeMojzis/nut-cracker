@@ -85,8 +85,17 @@ A user's map is visible **only to themselves and their accepted friends**. This 
 enforced in application authorization on every map-read endpoint (return `403`
 otherwise) — it is not a schema-level constraint.
 
-## Auth Plan
+## Auth
 
-Google OAuth is required; email/password is also supported. Auth is planned to be
-built last, but the schema (`users.password_hash` nullable + `user_identities`)
-already supports both.
+Email/password auth is implemented with DB-backed sessions. Google OAuth is
+planned (the `user_identities` table already supports external providers).
+
+- `users.email_verified` (`boolean`) — set true after the user clicks the
+  verification link.
+- `sessions` — `id` (opaque token / cookie value) PK, `user_id` → users.id,
+  `created_at`, `expires_at`. The session cookie is `nc_session` (HttpOnly).
+- `user_tokens` — one-time tokens: `token` PK, `user_id`, `kind`
+  (`verify` | `reset`), `expires_at`, `created_at`.
+
+Passwords are hashed with bcrypt. `users.password_hash` is nullable (OAuth-only
+accounts have no password).

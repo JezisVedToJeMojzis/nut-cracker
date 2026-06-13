@@ -21,7 +21,7 @@
 	async function loadMap(id: string) {
 		loading = true;
 		try {
-			const [list, st] = await Promise.all([getMap(id, id), getSettings(id)]);
+			const [list, st] = await Promise.all([getMap(id), getSettings(id)]);
 			const next: Record<string, number> = {};
 			for (const c of list) next[c.country_code] = c.cracks;
 			cracks = next;
@@ -75,7 +75,7 @@
 {#if !user.id}
 	<div class="card empty">
 		<span class="emoji">🌍</span>
-		<p>Enter your user ID in the top-right to load your map.</p>
+		<p>Loading your map…</p>
 	</div>
 {:else}
 	<MapStats {cracks} {countMode} />

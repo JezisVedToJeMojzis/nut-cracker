@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -51,8 +54,23 @@ func New(db *pgxpool.Pool, cfg *config.Config) *Server {
 	}
 }
 
-// Routes returns the HTTP handler with all routes registered.
+// Routes returns the top-level HTTP handler: the API under /api, a health
+// check at /health, and (when configured) the built frontend for everything
+// else with SPA fallback.
 func (s *Server) Routes() http.Handler {
+	api := s.apiRoutes()
+
+	top := http.NewServeMux()
+	top.Handle("/api/", http.StripPrefix("/api", api))
+	top.HandleFunc("/health", s.handleHealth)
+	if s.cfg.StaticDir != "" {
+		top.Handle("/", s.spaHandler(s.cfg.StaticDir))
+	}
+	return top
+}
+
+// apiRoutes builds the API mux (paths are relative; mounted under /api).
+func (s *Server) apiRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.handleHealth)
 
@@ -673,6 +691,27 @@ func pathID(w http.ResponseWriter, r *http.Request, name string) (int64, bool) {
 		return 0, false
 	}
 	return id, true
+}
+
+// spaHandler serves built frontend files from dir, falling back to index.html
+// for unknown paths so client-side routing (e.g. /login, /friends/5) works.
+func (s *Server) spaHandler(dir string) http.Handler {
+	index := filepath.Join(dir, "index.html")
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Resolve the requested file safely within dir.
+		clean := filepath.Clean(strings.TrimPrefix(r.URL.Path, "/"))
+		path := filepath.Join(dir, clean)
+		if !strings.HasPrefix(path, filepath.Clean(dir)) {
+			http.NotFound(w, r)
+			return
+		}
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			http.ServeFile(w, r, path)
+			return
+		}
+		// Fallback to the SPA entry point.
+		http.ServeFile(w, r, index)
+	})
 }
 
 // writeJSON writes v as a JSON response with the given status code.

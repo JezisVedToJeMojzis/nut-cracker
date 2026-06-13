@@ -1,0 +1,10 @@
+.git
+.github
+**/node_modules
+web/build
+web/.svelte-kit
+*.exe
+.env
+docs
+README.md
+CLAUDE.md

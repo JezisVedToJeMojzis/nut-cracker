@@ -1,0 +1,21 @@
+# Render Blueprint: single Docker web service serving the API + frontend.
+# Create the database separately (e.g. Neon) and set DATABASE_URL in the
+# Render dashboard. Render injects PORT automatically.
+services:
+  - type: web
+    name: nutcracker
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false # set in dashboard (Neon connection string, sslmode=require)
+      - key: APP_BASE_URL
+        sync: false # set to the public Render URL once known
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: RESEND_API_KEY
+        sync: false # optional; empty = emails logged to server logs
+      - key: MAIL_FROM
+        value: "Nut Cracker <onboarding@resend.dev>"

@@ -23,6 +23,10 @@ type Config struct {
 	ResendAPIKey string
 	// MailFrom is the From address for outgoing emails.
 	MailFrom string
+
+	// StaticDir is the directory of built frontend files to serve (empty
+	// disables static serving, e.g. in local dev where Vite serves the UI).
+	StaticDir string
 }
 
 // Load reads configuration from the environment. In development it first
@@ -40,6 +44,10 @@ func Load() (*Config, error) {
 	httpAddr := os.Getenv("HTTP_ADDR")
 	if httpAddr == "" {
 		httpAddr = ":8080"
+	}
+	// Many hosts (Render, etc.) inject the port to listen on via PORT.
+	if port := os.Getenv("PORT"); port != "" {
+		httpAddr = ":" + port
 	}
 
 	appBaseURL := os.Getenv("APP_BASE_URL")
@@ -59,5 +67,6 @@ func Load() (*Config, error) {
 		CookieSecure: os.Getenv("COOKIE_SECURE") == "true",
 		ResendAPIKey: os.Getenv("RESEND_API_KEY"),
 		MailFrom:     mailFrom,
+		StaticDir:    os.Getenv("STATIC_DIR"),
 	}, nil
 }

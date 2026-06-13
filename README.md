@@ -54,10 +54,34 @@ npm install
 npm run dev      # http://localhost:5173
 ```
 
-The frontend (SvelteKit) proxies `/api/*` to the Go backend on `:8080`. Until
-real auth exists, enter a user UUID in the page to act as that user (sent as the
-`X-User-ID` header). Left-click a country to crack it, right-click to remove a
-crack; toggle **Count mode** to track how many people per country.
+The frontend (SvelteKit) proxies `/api/*` to the Go backend on `:8080`. Sign up
+or log in (cookie session). Left-click a country to crack it, right-click to
+remove a crack; toggle **Count mode** to track how many people per country.
+
+## Deployment
+
+The app deploys as a **single Docker service**: the Go server serves the built
+frontend and the API on one origin (`/api`), runs DB migrations and seeds
+countries on startup.
+
+- **Database:** create a Postgres instance (e.g. [Neon](https://neon.tech)) and
+  copy its connection string (use `sslmode=require`).
+- **Host (Render):** the repo includes a `Dockerfile` and `render.yaml`. Create a
+  Blueprint from the repo, then set env vars in the dashboard:
+  - `DATABASE_URL` — the Neon connection string
+  - `APP_BASE_URL` — the public Render URL (e.g. `https://nutcracker.onrender.com`)
+  - `COOKIE_SECURE=true`
+  - `RESEND_API_KEY` — optional (empty = emails logged to server logs)
+
+Render injects `PORT` automatically. HTTPS is provided, which also makes the PWA
+installable on phones.
+
+Build the image locally:
+
+```bash
+docker build -t nutcracker .
+docker run -p 8080:8080 --env-file .env nutcracker
+```
 
 ## Common Commands
 

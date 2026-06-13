@@ -12,6 +12,7 @@ import (
 
 	"nutcracker/internal/config"
 	"nutcracker/internal/db"
+	"nutcracker/internal/seed"
 	"nutcracker/internal/server"
 )
 
@@ -32,11 +33,23 @@ func run(args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
+	// Apply database migrations before connecting the pool.
+	if err := db.Migrate(cfg.DatabaseURL); err != nil {
+		return fmt.Errorf("migrating database: %w", err)
+	}
+
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("connecting to database: %w", err)
 	}
 	defer pool.Close()
+
+	// Seed reference data (countries) on first run.
+	if n, err := seed.CountriesIfEmpty(ctx, pool); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: seeding countries failed: %v\n", err)
+	} else if n > 0 {
+		fmt.Printf("nutcracker: seeded %d countries\n", n)
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

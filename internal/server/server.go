@@ -51,7 +51,14 @@ func New(db *pgxpool.Pool, cfg *config.Config) *Server {
 		settings: settings.NewStore(db),
 		users:    users.NewStore(db),
 		auth:     auth.NewStore(db),
-		mail:     mail.New(cfg.ResendAPIKey, cfg.MailFrom),
+		mail: mail.New(mail.Options{
+			From:         cfg.MailFrom,
+			ResendAPIKey: cfg.ResendAPIKey,
+			SMTPHost:     cfg.SMTPHost,
+			SMTPPort:     cfg.SMTPPort,
+			SMTPUser:     cfg.SMTPUser,
+			SMTPPass:     cfg.SMTPPass,
+		}),
 	}
 }
 

@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/smtp"
+	"strings"
 	"time"
 )
 
@@ -18,13 +20,33 @@ type Mailer interface {
 	SendPasswordReset(ctx context.Context, to, link string) error
 }
 
-// New returns a Resend-backed mailer if apiKey is set, otherwise a console
-// mailer that logs messages instead of sending them.
-func New(apiKey, from string) Mailer {
-	if apiKey == "" {
+// Options configures which mail transport to use.
+type Options struct {
+	From         string
+	ResendAPIKey string
+	SMTPHost     string
+	SMTPPort     string
+	SMTPUser     string
+	SMTPPass     string
+}
+
+// New picks a transport: SMTP if a host is configured, else Resend if an API
+// key is set, else a console mailer that logs messages (development).
+func New(o Options) Mailer {
+	switch {
+	case o.SMTPHost != "":
+		return &smtpMailer{
+			addr: o.SMTPHost + ":" + o.SMTPPort,
+			host: o.SMTPHost,
+			user: o.SMTPUser,
+			pass: o.SMTPPass,
+			from: o.From,
+		}
+	case o.ResendAPIKey != "":
+		return &resendMailer{apiKey: o.ResendAPIKey, from: o.From, client: &http.Client{Timeout: 10 * time.Second}}
+	default:
 		return &consoleMailer{}
 	}
-	return &resendMailer{apiKey: apiKey, from: from, client: &http.Client{Timeout: 10 * time.Second}}
 }
 
 // --- Console (dev) -------------------------------------------------------
@@ -80,6 +102,48 @@ func (m *resendMailer) send(ctx context.Context, to, subject, html string) error
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("resend returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// --- SMTP (e.g. Gmail) ---------------------------------------------------
+
+type smtpMailer struct {
+	addr string // host:port
+	host string
+	user string
+	pass string
+	from string
+}
+
+func (m *smtpMailer) SendVerification(_ context.Context, to, link string) error {
+	return m.send(to, "Verify your Nut Cracker email",
+		htmlButton("Welcome to Nut Cracker! 🥜", "Confirm your email address to finish setting up your account.", "Verify email", link))
+}
+
+func (m *smtpMailer) SendPasswordReset(_ context.Context, to, link string) error {
+	return m.send(to, "Reset your Nut Cracker password",
+		htmlButton("Password reset", "Click below to choose a new password. If you didn't request this, you can ignore this email.", "Reset password", link))
+}
+
+func (m *smtpMailer) send(to, subject, html string) error {
+	headers := map[string]string{
+		"From":         m.from,
+		"To":           to,
+		"Subject":      subject,
+		"MIME-Version": "1.0",
+		"Content-Type": `text/html; charset="UTF-8"`,
+	}
+	var msg strings.Builder
+	for k, v := range headers {
+		fmt.Fprintf(&msg, "%s: %s\r\n", k, v)
+	}
+	msg.WriteString("\r\n")
+	msg.WriteString(html)
+
+	auth := smtp.PlainAuth("", m.user, m.pass, m.host)
+	if err := smtp.SendMail(m.addr, auth, m.user, []string{to}, []byte(msg.String())); err != nil {
+		return fmt.Errorf("smtp send: %w", err)
 	}
 	return nil
 }

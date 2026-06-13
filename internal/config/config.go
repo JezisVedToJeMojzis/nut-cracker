@@ -24,6 +24,13 @@ type Config struct {
 	// MailFrom is the From address for outgoing emails.
 	MailFrom string
 
+	// SMTP settings. When SMTPHost is set, email is sent via SMTP (e.g. Gmail)
+	// instead of Resend.
+	SMTPHost string
+	SMTPPort string
+	SMTPUser string
+	SMTPPass string
+
 	// StaticDir is the directory of built frontend files to serve (empty
 	// disables static serving, e.g. in local dev where Vite serves the UI).
 	StaticDir string
@@ -60,6 +67,11 @@ func Load() (*Config, error) {
 		mailFrom = "Nut Cracker <onboarding@resend.dev>"
 	}
 
+	smtpPort := os.Getenv("SMTP_PORT")
+	if smtpPort == "" {
+		smtpPort = "587"
+	}
+
 	return &Config{
 		DatabaseURL:  dbURL,
 		HTTPAddr:     httpAddr,
@@ -68,5 +80,9 @@ func Load() (*Config, error) {
 		ResendAPIKey: os.Getenv("RESEND_API_KEY"),
 		MailFrom:     mailFrom,
 		StaticDir:    os.Getenv("STATIC_DIR"),
+		SMTPHost:     os.Getenv("SMTP_HOST"),
+		SMTPPort:     smtpPort,
+		SMTPUser:     os.Getenv("SMTP_USER"),
+		SMTPPass:     os.Getenv("SMTP_PASS"),
 	}, nil
 }

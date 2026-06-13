@@ -42,13 +42,15 @@
 		centers = map;
 	});
 
+	// Heat scale: 1 crack = green, ramping through yellow to red as the count
+	// rises (capped at MAX_HEAT). Uncracked countries stay neutral grey.
+	const MAX_HEAT = 10;
 	function fillFor(code: string): string {
 		const count = cracks[code] ?? 0;
 		if (count <= 0) return '#3a414c';
-		if (!countMode) return '#10b981';
-		const step = Math.min(count, 6);
-		const lightness = 58 - step * 6;
-		return `hsl(160, 70%, ${lightness}%)`;
+		const t = Math.min(count, MAX_HEAT);
+		const hue = 140 - ((t - 1) / (MAX_HEAT - 1)) * 140; // 140 (green) -> 0 (red)
+		return `hsl(${hue}, 72%, 48%)`;
 	}
 
 	// ---- Pan & zoom ---------------------------------------------------------
@@ -191,7 +193,6 @@
 					<path
 						d={loc.path}
 						class="country"
-						class:cracked={(cracks[loc.code] ?? 0) > 0}
 						data-code={loc.code}
 						fill={fillFor(loc.code)}
 						role="button"
@@ -290,9 +291,6 @@
 	.country:focus,
 	.country:focus-visible {
 		outline: none;
-	}
-	.country.cracked {
-		filter: drop-shadow(0 0 1.5px rgba(16, 185, 129, 0.7));
 	}
 	.label {
 		font-size: 11px;

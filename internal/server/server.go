@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -566,7 +567,11 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	link := s.cfg.AppBaseURL + "/api/auth/verify?token=" + verifyToken
-	go s.mail.SendVerification(context.Background(), body.Email, link)
+	go func(email, link string) {
+		if err := s.mail.SendVerification(context.Background(), email, link); err != nil {
+			log.Printf("send verification email to %s failed: %v", email, err)
+		}
+	}(body.Email, link)
 
 	if err := s.startSession(w, r, userID); err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
@@ -651,7 +656,11 @@ func (s *Server) handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 	if id, ok, _ := s.auth.UserIDByEmail(r.Context(), body.Email); ok {
 		if token, err := s.auth.CreateToken(r.Context(), id, "reset", 1*time.Hour); err == nil {
 			link := s.cfg.AppBaseURL + "/reset?token=" + token
-			go s.mail.SendPasswordReset(context.Background(), body.Email, link)
+			go func(email, link string) {
+				if err := s.mail.SendPasswordReset(context.Background(), email, link); err != nil {
+					log.Printf("send reset email to %s failed: %v", email, err)
+				}
+			}(body.Email, link)
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})

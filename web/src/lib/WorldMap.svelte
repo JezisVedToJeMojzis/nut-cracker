@@ -1,5 +1,6 @@
 <script lang="ts">
 	import world from '@svg-maps/world';
+	import { onMount } from 'svelte';
 
 	type Props = {
 		/** Map of UPPERCASE ISO code -> crack count. */
@@ -23,6 +24,23 @@
 	}));
 
 	let hovered = $state<{ name: string; code: string; count: number } | null>(null);
+
+	// Centre point of each country (bounding-box centre, in SVG units), computed
+	// once after mount and used to position count labels.
+	let centers = $state<Record<string, { x: number; y: number }>>({});
+	let svgEl = $state<SVGSVGElement | null>(null);
+
+	onMount(() => {
+		if (!svgEl) return;
+		const map: Record<string, { x: number; y: number }> = {};
+		for (const p of svgEl.querySelectorAll<SVGPathElement>('path.country')) {
+			const code = p.getAttribute('data-code');
+			if (!code) continue;
+			const b = p.getBBox();
+			map[code] = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+		}
+		centers = map;
+	});
 
 	function fillFor(code: string): string {
 		const count = cracks[code] ?? 0;
@@ -162,13 +180,19 @@
 		aria-label="Interactive world map"
 	>
 		<div class="transform" style:transform={`translate(${tx}px, ${ty}px) scale(${scale})`}>
-			<svg viewBox={world.viewBox} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+			<svg
+				bind:this={svgEl}
+				viewBox={world.viewBox}
+				xmlns="http://www.w3.org/2000/svg"
+				aria-hidden="true"
+			>
 				{#each locations as loc (loc.code)}
 					<!-- svelte-ignore a11y_click_events_have_key_events -->
 					<path
 						d={loc.path}
 						class="country"
 						class:cracked={(cracks[loc.code] ?? 0) > 0}
+						data-code={loc.code}
 						fill={fillFor(loc.code)}
 						role="button"
 						tabindex="-1"
@@ -180,6 +204,22 @@
 						onmouseleave={() => (hovered = null)}
 					/>
 				{/each}
+
+				{#if countMode}
+					{#each locations as loc (loc.code)}
+						{#if (cracks[loc.code] ?? 0) > 0 && centers[loc.code]}
+							<text
+								class="label"
+								x={centers[loc.code].x}
+								y={centers[loc.code].y}
+								text-anchor="middle"
+								dominant-baseline="central"
+							>
+								{cracks[loc.code]}
+							</text>
+						{/if}
+					{/each}
+				{/if}
 			</svg>
 		</div>
 	</div>
@@ -253,6 +293,16 @@
 	}
 	.country.cracked {
 		filter: drop-shadow(0 0 1.5px rgba(16, 185, 129, 0.7));
+	}
+	.label {
+		font-size: 11px;
+		font-weight: 700;
+		fill: #ffffff;
+		paint-order: stroke;
+		stroke: rgba(2, 28, 20, 0.85);
+		stroke-width: 0.5px;
+		pointer-events: none;
+		user-select: none;
 	}
 	.country:hover {
 		stroke: #f8fafc;

@@ -43,14 +43,14 @@
 		</div>
 	</div>
 
-	{#if top.length > 0}
+	{#if countMode && top.length > 0}
 		<div class="top">
 			<span class="top-title">Top countries</span>
 			<div class="chips">
 				{#each top as t (t.code)}
 					<span class="chip">
 						{t.name}
-						{#if countMode}<span class="cnt">{t.count}</span>{/if}
+						<span class="cnt">{t.count}</span>
 					</span>
 				{/each}
 			</div>

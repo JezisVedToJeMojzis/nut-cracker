@@ -3,6 +3,7 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import { page } from '$app/state';
 	import { user } from '$lib/user.svelte';
+	import Toaster from '$lib/Toaster.svelte';
 
 	let { children } = $props();
 
@@ -53,6 +54,8 @@
 <main>
 	{@render children()}
 </main>
+
+<Toaster />
 
 <style>
 	header {

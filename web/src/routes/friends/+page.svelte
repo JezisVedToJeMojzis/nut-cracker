@@ -12,6 +12,7 @@
 		type UserCard
 	} from '$lib/api';
 	import { user } from '$lib/user.svelte';
+	import { toaster } from '$lib/toast.svelte';
 	import { slide } from 'svelte/transition';
 
 	const initials = (name: string) => name.slice(0, 2).toUpperCase();
@@ -22,8 +23,6 @@
 	let targetId = $state('');
 	let match = $state<UserCard | null>(null);
 	let lookupError = $state('');
-	let error = $state('');
-	let notice = $state('');
 
 	let lookupTimer: ReturnType<typeof setTimeout> | undefined;
 	function onTargetInput() {
@@ -52,7 +51,6 @@
 	});
 
 	async function refresh(id: string) {
-		error = '';
 		try {
 			[friends, incoming, outgoing] = await Promise.all([
 				listFriends(id),
@@ -60,19 +58,17 @@
 				listOutgoing(id)
 			]);
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			toaster.error(e instanceof Error ? e.message : String(e));
 		}
 	}
 
 	async function act(fn: () => Promise<unknown>, ok: string) {
-		error = '';
-		notice = '';
 		try {
 			await fn();
-			notice = ok;
+			toaster.success(ok);
 			await refresh(user.id);
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			toaster.error(e instanceof Error ? e.message : String(e));
 		}
 	}
 
@@ -92,9 +88,6 @@
 {#if !user.id}
 	<div class="card empty">Enter your user ID in the top-right to manage friends.</div>
 {:else}
-	{#if error}<p class="banner error" transition:slide>⚠️ {error}</p>{/if}
-	{#if notice}<p class="banner notice" transition:slide>{notice}</p>{/if}
-
 	<section class="card">
 		<h2>Add a friend</h2>
 		<div class="row">
@@ -299,19 +292,5 @@
 		padding: 1.5rem;
 		text-align: center;
 		color: var(--muted);
-	}
-	.banner {
-		padding: 0.6rem 0.9rem;
-		border-radius: var(--radius-sm);
-		font-size: 0.9rem;
-		margin: 0.5rem 0;
-	}
-	.banner.error {
-		background: var(--danger-soft);
-		color: var(--danger);
-	}
-	.banner.notice {
-		background: var(--primary-soft);
-		color: var(--primary-700);
 	}
 </style>

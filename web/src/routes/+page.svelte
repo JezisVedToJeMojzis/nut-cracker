@@ -1,11 +1,12 @@
 <script lang="ts">
 	import WorldMap from '$lib/WorldMap.svelte';
+	import MapStats from '$lib/MapStats.svelte';
 	import { getMap, increment, decrement, getSettings } from '$lib/api';
 	import { user } from '$lib/user.svelte';
+	import { toaster } from '$lib/toast.svelte';
 
 	let countMode = $state(false);
 	let cracks = $state<Record<string, number>>({});
-	let error = $state('');
 	let loading = $state(false);
 
 	// Reload whenever the current user changes.
@@ -19,7 +20,6 @@
 
 	async function loadMap(id: string) {
 		loading = true;
-		error = '';
 		try {
 			const [list, st] = await Promise.all([getMap(id, id), getSettings(id)]);
 			const next: Record<string, number> = {};
@@ -27,7 +27,7 @@
 			cracks = next;
 			countMode = st.count_mode;
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			toaster.error(e instanceof Error ? e.message : String(e));
 		} finally {
 			loading = false;
 		}
@@ -35,7 +35,7 @@
 
 	async function onCrack(code: string) {
 		if (!user.id) {
-			error = 'Set your user ID first';
+			toaster.error('Set your user ID first');
 			return;
 		}
 		// With count mode off, an already-coloured country stays as-is.
@@ -44,7 +44,7 @@
 			const res = await increment(user.id, code);
 			cracks = { ...cracks, [code]: res.cracks };
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			toaster.error(e instanceof Error ? e.message : String(e));
 		}
 	}
 
@@ -60,11 +60,9 @@
 				cracks = { ...cracks, [code]: res.cracks };
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : String(e);
+			toaster.error(e instanceof Error ? e.message : String(e));
 		}
 	}
-
-	const total = $derived(Object.keys(cracks).length);
 </script>
 
 <div class="head">
@@ -72,12 +70,6 @@
 		<h1>My Map</h1>
 		<p class="muted sub">Click a country to mark where you've cracked nuts with someone.</p>
 	</div>
-	{#if user.id}
-		<div class="stat">
-			<span class="num">{total}</span>
-			<span class="muted">cracked</span>
-		</div>
-	{/if}
 </div>
 
 {#if !user.id}
@@ -86,6 +78,7 @@
 		<p>Enter your user ID in the top-right to load your map.</p>
 	</div>
 {:else}
+	<MapStats {cracks} {countMode} />
 	<p class="instructions muted small">
 		{#if countMode}
 			<strong>Count mode on</strong> · left-click adds a crack, right-click removes one.
@@ -96,8 +89,6 @@
 		{#if loading}<span class="spinner"></span>{/if}
 	</p>
 {/if}
-
-{#if error}<p class="error">⚠️ {error}</p>{/if}
 
 <WorldMap {cracks} {countMode} oncrack={onCrack} onuncrack={onUncrack} />
 
@@ -115,27 +106,6 @@
 	.sub {
 		margin: 0.25rem 0 0;
 		font-size: 0.92rem;
-	}
-	.stat {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		padding: 0.5rem 1rem;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		box-shadow: var(--shadow-sm);
-		line-height: 1.1;
-	}
-	.stat .num {
-		font-size: 1.5rem;
-		font-weight: 700;
-		color: var(--primary-700);
-	}
-	.stat .muted {
-		font-size: 0.72rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
 	}
 	.instructions {
 		margin: 0 0 1rem;
@@ -159,9 +129,5 @@
 	}
 	.empty .emoji {
 		font-size: 2.5rem;
-	}
-	.error {
-		color: var(--danger);
-		font-size: 0.9rem;
 	}
 </style>

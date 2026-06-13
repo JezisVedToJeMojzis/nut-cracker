@@ -168,6 +168,7 @@
 					<path
 						d={loc.path}
 						class="country"
+						class:cracked={(cracks[loc.code] ?? 0) > 0}
 						fill={fillFor(loc.code)}
 						role="button"
 						tabindex="-1"
@@ -205,6 +206,7 @@
 		width: 100%;
 	}
 	.viewport {
+		position: relative;
 		width: 100%;
 		overflow: hidden;
 		border-radius: var(--radius);
@@ -216,6 +218,17 @@
 	}
 	.viewport:active {
 		cursor: grabbing;
+	}
+	/* Subtle vignette + sheen over the ocean for depth. */
+	.viewport::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		border-radius: var(--radius);
+		background:
+			radial-gradient(120% 90% at 50% 0%, rgba(255, 255, 255, 0.06), transparent 55%),
+			radial-gradient(140% 120% at 50% 110%, rgba(0, 0, 0, 0.45), transparent 60%);
 	}
 	.transform {
 		transform-origin: 0 0;
@@ -237,6 +250,9 @@
 	.country:focus,
 	.country:focus-visible {
 		outline: none;
+	}
+	.country.cracked {
+		filter: drop-shadow(0 0 1.5px rgba(16, 185, 129, 0.7));
 	}
 	.country:hover {
 		stroke: #f8fafc;

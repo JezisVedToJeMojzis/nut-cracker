@@ -15,7 +15,3 @@ services:
         sync: false # set to the public Render URL once known
       - key: COOKIE_SECURE
         value: "true"
-      - key: RESEND_API_KEY
-        sync: false # optional; empty = emails logged to server logs
-      - key: MAIL_FROM
-        value: "Nut Cracker <onboarding@resend.dev>"

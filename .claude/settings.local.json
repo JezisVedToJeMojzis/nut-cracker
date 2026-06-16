@@ -66,7 +66,8 @@
       "Bash(docker info *)",
       "Bash(break)",
       "PowerShell(Start-Sleep -Seconds 4; try { \\(Invoke-WebRequest -Uri \"http://localhost:8080/health\" -UseBasicParsing\\).Content } catch { \"backend not ready\" })",
-      "Bash(git commit -q -m 'Remove email flows; simplify auth to login/register/logout *)"
+      "Bash(git commit -q -m 'Remove email flows; simplify auth to login/register/logout *)",
+      "Bash(git commit -q -m 'Remove unused APP_BASE_URL and email/SMTP config *)"
     ]
   }
 }

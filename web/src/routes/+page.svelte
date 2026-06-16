@@ -81,11 +81,12 @@
 	<MapStats {cracks} {countMode} />
 	<p class="instructions muted small">
 		{#if countMode}
-			<strong>Count mode on</strong> · left-click adds a crack, right-click removes one.
+			<strong>Count mode on</strong> · tap a country to add a crack, long-press (or right-click) to
+			remove one.
 		{:else}
-			Left-click to mark a country, right-click to remove it.
+			Tap a country to mark it, long-press (or right-click) to remove it.
 		{/if}
-		Drag to pan, scroll or pinch to zoom.
+		Drag to pan, pinch or scroll to zoom.
 		{#if loading}<span class="spinner"></span>{/if}
 	</p>
 {/if}

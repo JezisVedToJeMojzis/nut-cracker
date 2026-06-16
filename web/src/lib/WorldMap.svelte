@@ -114,12 +114,14 @@
 	}
 
 	function onPointerMove(e: PointerEvent) {
+		if (moved > 6) cancelLongPress();
 		if (!pointers.has(e.pointerId)) return;
 		const prev = pointers.get(e.pointerId)!;
 		const cur = localPoint(e);
 		pointers.set(e.pointerId, cur);
 
 		if (pointers.size === 2) {
+			cancelLongPress();
 			// Pinch zoom around the midpoint.
 			const [a, b] = [...pointers.values()];
 			const dist = Math.hypot(a.x - b.x, a.y - b.y);
@@ -142,6 +144,29 @@
 	function onPointerUp(e: PointerEvent) {
 		pointers.delete(e.pointerId);
 		if (pointers.size < 2) lastPinchDist = 0;
+		cancelLongPress();
+	}
+
+	// Long-press a country to remove a crack (touch-friendly equivalent of
+	// right-click). Fires after the press is held still for LONG_PRESS_MS.
+	const LONG_PRESS_MS = 450;
+	let longPressTimer: ReturnType<typeof setTimeout> | undefined;
+	let longPressed = false;
+
+	function startLongPress(code: string) {
+		cancelLongPress();
+		longPressed = false;
+		longPressTimer = setTimeout(() => {
+			if (moved > 6) return;
+			longPressed = true;
+			navigator.vibrate?.(30);
+			onuncrack(code);
+		}, LONG_PRESS_MS);
+	}
+
+	function cancelLongPress() {
+		clearTimeout(longPressTimer);
+		longPressTimer = undefined;
 	}
 
 	function zoomButton(factor: number) {
@@ -155,9 +180,14 @@
 		ty = 0;
 	}
 
-	// A click only counts as a crack if the pointer barely moved (not a pan).
+	// A click only counts as a crack if the pointer barely moved (not a pan)
+	// and it wasn't a long-press (which removes instead).
 	function handleClick(e: MouseEvent, code: string) {
 		e.preventDefault();
+		if (longPressed) {
+			longPressed = false;
+			return;
+		}
 		if (moved > 6) return;
 		oncrack(code);
 	}
@@ -198,6 +228,7 @@
 						role="button"
 						tabindex="-1"
 						aria-label={loc.name}
+						onpointerdown={() => startLongPress(loc.code)}
 						onclick={(e) => handleClick(e, loc.code)}
 						oncontextmenu={(e) => handleContext(e, loc.code)}
 						onmouseenter={() =>

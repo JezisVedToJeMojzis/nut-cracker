@@ -48,18 +48,18 @@ func randomToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// Register creates a new account and a verification token. The password is
-// bcrypt-hashed. Returns the new user id and the verification token.
-func (s *Store) Register(ctx context.Context, email, username, password string) (userID int64, verifyToken string, err error) {
+// Register creates a new account. The password is bcrypt-hashed. Returns the
+// new user id.
+func (s *Store) Register(ctx context.Context, email, username, password string) (userID int64, err error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	username = strings.TrimSpace(username)
 	if !strings.Contains(email, "@") || len(username) < 2 || len(username) > 30 || len(password) < 8 {
-		return 0, "", ErrInvalidInput
+		return 0, ErrInvalidInput
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return 0, "", fmt.Errorf("hashing password: %w", err)
+		return 0, fmt.Errorf("hashing password: %w", err)
 	}
 
 	err = s.db.QueryRow(ctx,
@@ -67,17 +67,12 @@ func (s *Store) Register(ctx context.Context, email, username, password string) 
 		email, username, string(hash)).Scan(&userID)
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		return 0, "", ErrEmailTaken
+		return 0, ErrEmailTaken
 	}
 	if err != nil {
-		return 0, "", fmt.Errorf("inserting user: %w", err)
+		return 0, fmt.Errorf("inserting user: %w", err)
 	}
-
-	verifyToken, err = s.CreateToken(ctx, userID, "verify", 48*time.Hour)
-	if err != nil {
-		return 0, "", err
-	}
-	return userID, verifyToken, nil
+	return userID, nil
 }
 
 // Authenticate verifies an email/password pair and returns the user id.

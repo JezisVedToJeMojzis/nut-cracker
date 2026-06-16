@@ -52,12 +52,6 @@ export const logout = () => req<{ ok: boolean }>('/auth/logout', { method: 'POST
 
 export const getMe = () => req<Profile>('/auth/me');
 
-export const forgotPassword = (email: string) =>
-	req<{ ok: boolean }>('/auth/forgot', { method: 'POST', body: { email } });
-
-export const resetPassword = (token: string, password: string) =>
-	req<{ ok: boolean }>('/auth/reset', { method: 'POST', body: { token, password } });
-
 // --- Profile -------------------------------------------------------------
 
 export const updateUsername = (userId: string, username: string) =>

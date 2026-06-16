@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,7 +17,6 @@ import (
 	"nutcracker/internal/auth"
 	"nutcracker/internal/config"
 	"nutcracker/internal/friends"
-	"nutcracker/internal/mail"
 	"nutcracker/internal/settings"
 	"nutcracker/internal/usermap"
 	"nutcracker/internal/users"
@@ -38,7 +36,6 @@ type Server struct {
 	settings *settings.Store
 	users    *users.Store
 	auth     *auth.Store
-	mail     mail.Mailer
 }
 
 // New creates a Server with the given database pool and config.
@@ -51,14 +48,6 @@ func New(db *pgxpool.Pool, cfg *config.Config) *Server {
 		settings: settings.NewStore(db),
 		users:    users.NewStore(db),
 		auth:     auth.NewStore(db),
-		mail: mail.New(mail.Options{
-			From:         cfg.MailFrom,
-			ResendAPIKey: cfg.ResendAPIKey,
-			SMTPHost:     cfg.SMTPHost,
-			SMTPPort:     cfg.SMTPPort,
-			SMTPUser:     cfg.SMTPUser,
-			SMTPPass:     cfg.SMTPPass,
-		}),
 	}
 }
 
@@ -86,9 +75,6 @@ func (s *Server) apiRoutes() *http.ServeMux {
 	mux.HandleFunc("POST /auth/login", s.handleLogin)
 	mux.HandleFunc("POST /auth/logout", s.handleLogout)
 	mux.HandleFunc("GET /auth/me", s.handleMe)
-	mux.HandleFunc("GET /auth/verify", s.handleVerifyEmail)
-	mux.HandleFunc("POST /auth/forgot", s.handleForgotPassword)
-	mux.HandleFunc("POST /auth/reset", s.handleResetPassword)
 
 	mux.HandleFunc("GET /users/{id}", s.handleGetProfile)
 	mux.HandleFunc("PATCH /users/{id}", s.handleUpdateProfile)
@@ -547,8 +533,7 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, userID int
 	return nil
 }
 
-// handleRegister creates an account, logs the user in, and emails a
-// verification link.
+// handleRegister creates an account and logs the user in.
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Email    string `json:"email"`
@@ -560,7 +545,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, verifyToken, err := s.auth.Register(r.Context(), body.Email, body.Username, body.Password)
+	userID, err := s.auth.Register(r.Context(), body.Email, body.Username, body.Password)
 	switch {
 	case errors.Is(err, auth.ErrInvalidInput):
 		writeError(w, http.StatusBadRequest, "email, a username (2-30 chars) and an 8+ char password are required")
@@ -572,13 +557,6 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-
-	link := s.cfg.AppBaseURL + "/api/auth/verify?token=" + verifyToken
-	go func(email, link string) {
-		if err := s.mail.SendVerification(context.Background(), email, link); err != nil {
-			log.Printf("send verification email to %s failed: %v", email, err)
-		}
-	}(body.Email, link)
 
 	if err := s.startSession(w, r, userID); err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
@@ -636,67 +614,6 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, p)
-}
-
-// handleVerifyEmail consumes a verification token and redirects to the app.
-func (s *Server) handleVerifyEmail(w http.ResponseWriter, r *http.Request) {
-	token := r.URL.Query().Get("token")
-	userID, err := s.auth.ConsumeToken(r.Context(), token, "verify")
-	if err == nil {
-		_ = s.auth.MarkEmailVerified(r.Context(), userID)
-		http.Redirect(w, r, s.cfg.AppBaseURL+"/?verified=1", http.StatusSeeOther)
-		return
-	}
-	http.Redirect(w, r, s.cfg.AppBaseURL+"/?verified=0", http.StatusSeeOther)
-}
-
-// handleForgotPassword emails a reset link. Always returns 200 to avoid
-// revealing whether an email is registered.
-func (s *Server) handleForgotPassword(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Email string `json:"email"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-	if id, ok, _ := s.auth.UserIDByEmail(r.Context(), body.Email); ok {
-		if token, err := s.auth.CreateToken(r.Context(), id, "reset", 1*time.Hour); err == nil {
-			link := s.cfg.AppBaseURL + "/reset?token=" + token
-			go func(email, link string) {
-				if err := s.mail.SendPasswordReset(context.Background(), email, link); err != nil {
-					log.Printf("send reset email to %s failed: %v", email, err)
-				}
-			}(body.Email, link)
-		}
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
-}
-
-// handleResetPassword consumes a reset token and sets a new password.
-func (s *Server) handleResetPassword(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Token    string `json:"token"`
-		Password string `json:"password"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-	userID, err := s.auth.ConsumeToken(r.Context(), body.Token, "reset")
-	if errors.Is(err, auth.ErrInvalidToken) {
-		writeError(w, http.StatusBadRequest, "invalid or expired reset link")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	if err := s.auth.SetPassword(r.Context(), userID, body.Password); err != nil {
-		writeError(w, http.StatusBadRequest, "password must be at least 8 characters")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // pathID parses a numeric path value, writing a 400 on failure.

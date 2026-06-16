@@ -11,7 +11,7 @@
 
 	let { children } = $props();
 
-	const PUBLIC = ['/login', '/reset'];
+	const PUBLIC = ['/login'];
 	const isPublic = $derived(PUBLIC.includes(page.url.pathname));
 
 	onMount(async () => {
